@@ -149,6 +149,61 @@ static void cubictcp_init(struct sock *sk)
 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
 }
 
+#define NSEC_PER_HZ		(NSEC_PER_SEC)
+#define NSEC_PER_MIN		(60 * NSEC_PER_SEC)
+#define STARLINK_SCAN_BEGIN	(12 * NSEC_PER_SEC - 100 * NSEC_PER_MSEC)
+#define STARLINK_SCAN_END	(12 * NSEC_PER_SEC + 200 * NSEC_PER_MSEC)
+#define STARLINK_SCAN_INTERVAL	15
+
+/*
+ * starlink does scan or handover at the fixed timing,
+ * 12s, 27s, 42s, 57s for each minute.
+ * XXX: only at 27s, handover occurs???
+ */
+static void starlink_time_init(void)
+{
+	struct timespec64 tv;
+
+	ktime_get_real_ts64(&tv);
+
+	/*
+	 * drop more than a minute in order to avoid wrap.
+	 * this may cause a negative value, but it is not
+	 * a problem when comuting current seconds later.
+	 */
+#define SEC_PER_MIN	60
+	starlink_jiffie_base = ((tv.tv_sec % SEC_PER_MIN) * NSEC_PER_SEC +
+	    tv.tv_nsec) * HZ;
+	/*
+	 * INITIAL_JIFFIES is unnecessary here because
+	 * it will be canceled when computing in starlink_jiffies().
+	 */
+	starlink_jiffie_base -= jiffies_64 * NSEC_PER_SEC;
+}
+
+static u64 starlink_jiffies(void)
+{
+	u64 njiffies;
+
+	njiffies = starlink_jiffie_base + jiffies_64 * NSEC_PER_SEC;
+	njiffies %= NSEC_PER_MIN * HZ;
+	return njiffies;
+}
+
+static u64 starlink_time(void)
+{
+
+	return (starlink_jiffies() + HZ / 2) / HZ;
+}
+
+static bool is_starlink_handover(void)
+{
+	u64 nsec;
+
+	nsec = starlink_time() % (STARLINK_SCAN_INTERVAL * NSEC_PER_SEC);
+	return (STARLINK_SCAN_BEGIN <= nsec && nsec <= STARLINK_SCAN_END);
+}
+
 static void cubictcp_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
 	if (event == CA_EVENT_TX_START) {
@@ -338,6 +393,30 @@ static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 
 	if (!tcp_is_cwnd_limited(sk))
 		return;
+
+#define STARLINK_HANDOVER
+#ifdef STARLINK_HANDOVER
+	if (is_starlink_handover()) {
+		if (tcp_snd_cwnd(tp) != 0) {
+			DP("handover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
+			    tcp_snd_cwnd(tp),
+			    ca->last_max_cwnd,
+			    ca->last_cwnd,
+			    ca->tcp_cwnd);
+			/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
+			tp->snd_cwnd = 0;
+		}
+		return;
+	}
+	if (tp->snd_cwnd == 0) {
+		tcp_snd_cwnd_set(tp, ca->last_cwnd);
+		DP("recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
+		    tcp_snd_cwnd(tp),
+		    ca->last_max_cwnd,
+		    ca->last_cwnd,
+		    ca->tcp_cwnd);
+	}
+#endif /* STALRLINK_HANDOVER */
 
 	if (tcp_in_slow_start(tp)) {
 		acked = tcp_slow_start(tp, acked);
