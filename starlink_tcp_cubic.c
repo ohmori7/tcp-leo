@@ -29,7 +29,15 @@
 #include <linux/btf_ids.h>
 #include <linux/module.h>
 #include <linux/math64.h>
+#include <linux/timekeeping.h>		/* starlink time */
 #include <net/tcp.h>
+
+#define STARLINK_DEBUG
+#ifdef STARLINK_DEBUG
+#define DP(...)	printk(__VA_ARGS__)
+#else /* STARLINK_DEBUG */
+#define DP(...)
+#endif /* ! STARLINK_DEBUG */
 
 #define BICTCP_BETA_SCALE    1024	/* Scale factor beta calculation
 					 * max_cwnd = snd_cwnd * beta
@@ -60,6 +68,8 @@ static int hystart_ack_delta_us __read_mostly = 2000;
 static u32 cube_rtt_scale __read_mostly;
 static u32 beta_scale __read_mostly;
 static u64 cube_factor __read_mostly;
+
+static s64 starlink_jiffie_base __read_mostly;
 
 /* Note parameters that are used for precomputing scale factors are read-only */
 module_param(fast_convergence, int, 0644);
@@ -508,6 +518,11 @@ static int __init cubictcp_register(void)
 	int ret;
 
 	BUILD_BUG_ON(sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE);
+
+	starlink_time_init();
+	DP("starlink time: %lld.%09lld\n",
+	    starlink_time() / NSEC_PER_SEC,
+	    starlink_time() % NSEC_PER_SEC);
 
 	/* Precompute a bunch of the scaling factors that are used per-packet
 	 * based on SRTT of 100ms
