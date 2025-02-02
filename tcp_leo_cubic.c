@@ -645,7 +645,7 @@ static void __exit cubictcp_unregister(void)
 module_init(cubictcp_register);
 module_exit(cubictcp_unregister);
 
-MODULE_AUTHOR("Sangtae Ha, Stephen Hemminger");
+MODULE_AUTHOR("Motoyuki OHMORI");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("CUBIC TCP for starlink");
+MODULE_DESCRIPTION("TCP LEO CUBIC for starlink");
 MODULE_VERSION("2.3");
