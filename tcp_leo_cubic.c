@@ -167,7 +167,7 @@ static void starlink_time_init(void)
 	/*
 	 * drop more than a minute in order to avoid wrap.
 	 * this may cause a negative value, but it is not
-	 * a problem when comuting current seconds later.
+	 * a problem when computing current seconds later.
 	 */
 #define SEC_PER_MIN	60
 	starlink_jiffie_base = ((tv.tv_sec % SEC_PER_MIN) * NSEC_PER_SEC +
