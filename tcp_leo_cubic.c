@@ -347,8 +347,11 @@ static void leo_handover_end(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct bictcp *ca = inet_csk_ca(sk);
 
-	if (tcp_snd_cwnd(tp) != 0)
+	if (tcp_snd_cwnd(tp) != 0) {
 		DP("handover: end, but already cwnd recovered???\n");
+		return;
+	}
+
 	tcp_snd_cwnd_set(tp, ca->last_cwnd);
 
 	DP("handover: end: recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
