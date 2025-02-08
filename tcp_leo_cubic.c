@@ -38,6 +38,8 @@
 #define DP(...)
 #endif /* ! STARLINK_DEBUG */
 
+#define STARLINK_HANDOVER
+
 #define BICTCP_BETA_SCALE    1024	/* Scale factor beta calculation
 					 * max_cwnd = snd_cwnd * beta
 					 */
@@ -68,8 +70,10 @@ static u32 cube_rtt_scale __read_mostly;
 static u32 beta_scale __read_mostly;
 static u64 cube_factor __read_mostly;
 
+#ifdef STARLINK_HANDOVER
 static s64 starlink_jiffies_base __read_mostly;
 static struct hrtimer starlink_jiffies_sync_timer;
+#endif /* STARLINK_HANDOVER */
 
 /* Note parameters that are used for precomputing scale factors are read-only */
 module_param(fast_convergence, int, 0644);
@@ -112,6 +116,15 @@ struct bictcp {
 	u32	end_seq;	/* end_seq of the round */
 	u32	last_ack;	/* last time when the ACK spacing is close */
 	u32	curr_rtt;	/* the minimum rtt of current round */
+
+#ifdef STARLINK_HANDOVER
+	/*
+	 * we cannot use hrtimer here because of build failure of
+	 * sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE.
+	 */
+	bool	handover_free_pending;
+	struct timer_list handover_timer;
+#endif /* STARLINK_HANDOVER */
 };
 
 static inline void bictcp_reset(struct bictcp *ca)
@@ -136,6 +149,12 @@ static inline void bictcp_hystart_reset(struct sock *sk)
 	ca->sample_cnt = 0;
 }
 
+/* XXX */
+#ifdef STARLINK_HANDOVER
+static void leo_handover_timer_init(struct sock *sk);
+static void leo_handover_timer_finish(struct sock *sk);
+#endif /* STARLINK_HANDOVER */
+
 static void cubictcp_init(struct sock *sk)
 {
 	struct bictcp *ca = inet_csk_ca(sk);
@@ -147,8 +166,21 @@ static void cubictcp_init(struct sock *sk)
 
 	if (!hystart && initial_ssthresh)
 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
+
+#ifdef STARLINK_HANDOVER
+	leo_handover_timer_init(sk);
+#endif /* STARLINK_HANDOVER */
 }
 
+static void leo_release(struct sock *sk)
+{
+
+#ifdef STARLINK_HANDOVER
+	leo_handover_timer_finish(sk);
+#endif /* STARLINK_HANDOVER */
+}
+
+#ifdef STARLINK_HANDOVER
 #define SEC_PER_MIN		60
 #define NSEC_PER_MIN		(SEC_PER_MIN * NSEC_PER_SEC)
 #define STARLINK_SCAN_BEGIN	(12 * NSEC_PER_SEC - 200 * NSEC_PER_MSEC)
@@ -248,6 +280,136 @@ static bool is_starlink_handover(void)
 	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
 	return (STARLINK_SCAN_BEGIN <= nsec && nsec <= STARLINK_SCAN_END);
 }
+
+static void leo_handover_timer_reset(struct sock *sk)
+{
+	struct bictcp *ca = inet_csk_ca(sk);
+	u64 nsec, timo;
+
+	/* XXX: directly compute in jiffies. */
+	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
+	if (nsec < STARLINK_SCAN_BEGIN)
+		timo = (STARLINK_SCAN_BEGIN - nsec);
+	else if (nsec < STARLINK_SCAN_END)
+		timo = (STARLINK_SCAN_END - nsec);
+	else
+		timo = (nsec - STARLINK_SCAN_END + STARLINK_SCAN_INTERVAL);
+	timo *= HZ;
+	timo /= NSEC_PER_SEC;
+	sk_reset_timer(sk, &ca->handover_timer, jiffies + timo);
+	DP("handover: timer reset: timo: %llu\n", timo);
+}
+
+static void leo_handover_start(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+#ifdef STARLINK_DEBUG
+	struct bictcp *ca = inet_csk_ca(sk);
+#endif /* STARLINK_DEBUG */
+
+	if (tcp_snd_cwnd(tp) == 0)
+		return;
+
+	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
+	tp->snd_cwnd = 0;
+
+	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
+	    tcp_snd_cwnd(tp),
+	    ca->last_max_cwnd,
+	    ca->last_cwnd,
+	    ca->tcp_cwnd);
+}
+
+static void leo_handover_end(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	if (tcp_snd_cwnd(tp) != 0)
+		DP("handover: end, but already cwnd recovered???\n");
+	tcp_snd_cwnd_set(tp, ca->last_cwnd);
+
+	DP("handover: end: recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
+	    tcp_snd_cwnd(tp),
+	    ca->last_max_cwnd,
+	    ca->last_cwnd,
+	    ca->tcp_cwnd);
+
+	/* wake up the socket if necessary. */
+	/* open code tcp_data_snd_check() in tcp_input.c. */
+	/*
+	 * XXX: should call tcp_push_pending_frames(),
+	 * but symbol is missing...
+	 */
+	if (sk->sk_socket &&
+	    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
+		DP("socket: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u\n",
+		    READ_ONCE(sk->sk_sndbuf),
+		    READ_ONCE(sk->sk_wmem_queued));
+		/*
+		 * we cannot use INDIRECT_CALL_1() here.
+		 * INDIRECT_CALL_1(sk->sk_write_space, sk_stream_write_space, sk);
+		 */
+		(*sk->sk_write_space)(sk);
+	}
+}
+
+static void leo_handover(struct sock *sk)
+{
+	u64 nsec;
+
+	/* XXX: directly compute in jiffies. */
+	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
+	if (nsec >= STARLINK_SCAN_END)
+		leo_handover_end(sk);
+	else if (nsec >= STARLINK_SCAN_BEGIN)
+		leo_handover_start(sk);
+	else
+		DP("handover: ???");
+}
+
+static void leo_handover_cb(struct timer_list *t)
+{
+	struct bictcp *ca = from_timer(ca, t, handover_timer);
+	uintptr_t off = (uintptr_t)inet_csk_ca(NULL);
+	struct sock *sk = (struct sock *)((uintptr_t)ca - off);
+
+	bh_lock_sock(sk);
+	if (! sock_owned_by_user(sk)) {
+		leo_handover(sk);
+		leo_handover_timer_reset(sk);
+	} else if (! ca->handover_free_pending) {
+		/* delegate our work to tcp_release_cb(). */
+		sock_hold(sk);
+		ca->handover_free_pending = true;
+	}
+	bh_unlock_sock(sk);
+
+	/* decrement refernce counter incremented in sk_reset_timer(). */
+	sock_put(sk);
+}
+
+static void
+leo_handover_timer_init(struct sock *sk)
+{
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	timer_setup(&ca->handover_timer, leo_handover_cb, 0);
+	leo_handover_timer_reset(sk);
+	ca->handover_free_pending = false;
+}
+
+static void
+leo_handover_timer_finish(struct sock *sk)
+{
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	(void)sk_stop_timer(sk, &ca->handover_timer);
+
+	if (ca->handover_free_pending)
+		sock_hold(sk);
+}
+#endif /* STARLINK_HANDOVER */
 
 static void cubictcp_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
@@ -439,44 +601,15 @@ static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 	if (!tcp_is_cwnd_limited(sk))
 		return;
 
-#define STARLINK_HANDOVER
 #ifdef STARLINK_HANDOVER
 	if (is_starlink_handover()) {
-		if (tcp_snd_cwnd(tp) != 0) {
-			DP("handover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
-			    tcp_snd_cwnd(tp),
-			    ca->last_max_cwnd,
-			    ca->last_cwnd,
-			    ca->tcp_cwnd);
-			/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
-			tp->snd_cwnd = 0;
-		}
+		if (tcp_snd_cwnd(tp) != 0)
+			leo_handover_start(sk);
 		return;
 	}
 	if (tp->snd_cwnd == 0) {
-		tcp_snd_cwnd_set(tp, ca->last_cwnd);
-		DP("recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
-		    tcp_snd_cwnd(tp),
-		    ca->last_max_cwnd,
-		    ca->last_cwnd,
-		    ca->tcp_cwnd);
-		/* wake up the socket if necessary. */
-		/* open code tcp_data_snd_check() in tcp_input.c. */
-		/*
-		 * XXX: should call tcp_push_pending_frames(),
-		 * but symbol is missing...
-		 */
-		if (sk->sk_socket &&
-		    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
-			DP("socket: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u\n",
-			    READ_ONCE(sk->sk_sndbuf),
-			    READ_ONCE(sk->sk_wmem_queued));
-			/*
-			 * we cannot use INDIRECT_CALL_1() here.
-			 * INDIRECT_CALL_1(sk->sk_write_space, sk_stream_write_space, sk);
-			 */
-			(*sk->sk_write_space)(sk);
-		}
+		DP("handover: unrecovered??? forcely recover cwnd.\n");
+		leo_handover_end(sk);
 	}
 #endif /* STALRLINK_HANDOVER */
 
@@ -626,6 +759,7 @@ static void cubictcp_acked(struct sock *sk, const struct ack_sample *sample)
 
 static struct tcp_congestion_ops cubictcp __read_mostly = {
 	.init		= cubictcp_init,
+	.release	= leo_release,
 	.ssthresh	= cubictcp_recalc_ssthresh,
 	.cong_avoid	= cubictcp_cong_avoid,
 	.set_state	= cubictcp_state,
@@ -640,6 +774,7 @@ BTF_SET8_START(tcp_cubic_check_kfunc_ids)
 #ifdef CONFIG_X86
 #ifdef CONFIG_DYNAMIC_FTRACE
 BTF_ID_FLAGS(func, cubictcp_init)
+BTF_ID_FLAGS(func, leo_release)
 BTF_ID_FLAGS(func, cubictcp_recalc_ssthresh)
 BTF_ID_FLAGS(func, cubictcp_cong_avoid)
 BTF_ID_FLAGS(func, cubictcp_state)
@@ -660,10 +795,12 @@ static int __init cubictcp_register(void)
 
 	BUILD_BUG_ON(sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE);
 
+#ifdef STARLINK_HANDOVER
 	starlink_time_init();
 	DP("starlink time: %lld.%09lld\n",
 	    starlink_time() / NSEC_PER_SEC,
 	    starlink_time() % NSEC_PER_SEC);
+#endif /* STARLINK_HANDOVER */
 
 	/* Precompute a bunch of the scaling factors that are used per-packet
 	 * based on SRTT of 100ms
@@ -702,7 +839,9 @@ static int __init cubictcp_register(void)
 static void __exit cubictcp_unregister(void)
 {
 
+#ifdef STARLINK_HANDOVER
 	starlink_time_finish();
+#endif /* STARLINK_HANDOVER */
 	tcp_unregister_congestion_control(&cubictcp);
 }
 
