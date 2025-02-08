@@ -194,7 +194,7 @@ static enum hrtimer_restart starlink_jiffies_sync(struct hrtimer *hrt)
 
 	njiffies = starlink_jiffies_base_compute();
 
-	DP("sync jiffies: old jiffies: %lld, new jiffies: %lld, diff %lld.%09lld\n",
+	DP("sync jiffies: old: %lld, new: %lld, diff %lld.%09lld\n",
 	    starlink_jiffies_base, njiffies,
 	    ((njiffies - starlink_jiffies_base + HZ / 2) / HZ / NSEC_PER_SEC) % SEC_PER_MIN,
 	    (((njiffies - starlink_jiffies_base + HZ / 2) / HZ) % NSEC_PER_SEC) *
