@@ -460,6 +460,23 @@ static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 		    ca->last_max_cwnd,
 		    ca->last_cwnd,
 		    ca->tcp_cwnd);
+		/* wake up the socket if necessary. */
+		/* open code tcp_data_snd_check() in tcp_input.c. */
+		/*
+		 * XXX: should call tcp_push_pending_frames(),
+		 * but symbol is missing...
+		 */
+		if (sk->sk_socket &&
+		    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
+			DP("socket: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u\n",
+			    READ_ONCE(sk->sk_sndbuf),
+			    READ_ONCE(sk->sk_wmem_queued));
+			/*
+			 * we cannot use INDIRECT_CALL_1() here.
+			 * INDIRECT_CALL_1(sk->sk_write_space, sk_stream_write_space, sk);
+			 */
+			(*sk->sk_write_space)(sk);
+		}
 	}
 #endif /* STALRLINK_HANDOVER */
 
