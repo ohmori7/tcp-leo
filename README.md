@@ -27,5 +27,14 @@ You need to specify the congestion control algorithm in your application by `set
 setsockopt(socket, IPPROTO_TCP, TCP_CONGESTION, "leo-cubic", strlen("leo-cubic"))
 ```
 
-# Bugs
+## Handover duration paramters
+
+You can change paramters of duration to stop transmissions in ms.
+
+```
+/sys/module/tcp_leo_cubic/parameters/starlink_handover_start_ms
+/sys/module/tcp_leo_cubic/parameters/starlink_handover_end_ms
+```
+
+## Bugs
 - secure boot support (currently, no digital signature)
