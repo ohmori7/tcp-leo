@@ -820,8 +820,7 @@ static int __init cubictcp_register(void)
 #ifdef STARLINK_HANDOVER
 	starlink_time_init();
 	DP("starlink time: %lld.%09lld\n",
-	    starlink_time() / NSEC_PER_SEC,
-	    starlink_time() % NSEC_PER_SEC);
+	    starlink_time() / NSEC_PER_SEC, starlink_time() % NSEC_PER_SEC);
 #endif /* STARLINK_HANDOVER */
 
 	/* Precompute a bunch of the scaling factors that are used per-packet
