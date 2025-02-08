@@ -72,6 +72,19 @@ static u64 cube_factor __read_mostly;
 
 #ifdef STARLINK_HANDOVER
 static s64 starlink_jiffies_base __read_mostly;
+#define STARLINK_HANDOVER_OFFSET_DEFAULT	(200ULL)
+#define STARLINK_HANDOVER_OFFSET_MAX		(1000ULL)
+#define __STARLINK_HANDOVER_OFFSET(v)					\
+	((u64)(v) <= STARLINK_HANDOVER_OFFSET_MAX ?			\
+	 (v) : STARLINK_HANDOVER_OFFSET_MAX)
+#define STARLINK_HANDOVER_OFFSET_START					\
+	__STARLINK_HANDOVER_OFFSET(starlink_handover_start_ms)
+#define STARLINK_HANDOVER_OFFSET_END					\
+	__STARLINK_HANDOVER_OFFSET(starlink_handover_end_ms)
+static int starlink_handover_start_ms __read_mostly =
+    STARLINK_HANDOVER_OFFSET_DEFAULT;
+static int starlink_handover_end_ms __read_mostly =
+    STARLINK_HANDOVER_OFFSET_DEFAULT;
 static struct hrtimer starlink_jiffies_sync_timer;
 #endif /* STARLINK_HANDOVER */
 
@@ -95,6 +108,13 @@ module_param(hystart_low_window, int, 0644);
 MODULE_PARM_DESC(hystart_low_window, "lower bound cwnd for hybrid slow start");
 module_param(hystart_ack_delta_us, int, 0644);
 MODULE_PARM_DESC(hystart_ack_delta_us, "spacing between ack's indicating train (usecs)");
+
+#ifdef STARLINK_HANDOVER
+module_param(starlink_handover_start_ms, int, 0644);
+MODULE_PARM_DESC(starlink_handover_start_ms, "starting offset of handover (0<=offset<=1000)");
+module_param(starlink_handover_end_ms, int, 0644);
+MODULE_PARM_DESC(starlink_handover_end_ms, "ending offset of handover (0<o=offset<=1000)");
+#endif /* STARLINK_HANDOVER */
 
 /* BIC TCP Parameters */
 struct bictcp {
@@ -183,9 +203,11 @@ static void leo_release(struct sock *sk)
 #ifdef STARLINK_HANDOVER
 #define SEC_PER_MIN		60
 #define NSEC_PER_MIN		(SEC_PER_MIN * NSEC_PER_SEC)
-#define STARLINK_SCAN_BEGIN	(12 * NSEC_PER_SEC - 200 * NSEC_PER_MSEC)
-#define STARLINK_SCAN_END	(12 * NSEC_PER_SEC + 200 * NSEC_PER_MSEC)
-#define STARLINK_SCAN_INTERVAL	(15 * NSEC_PER_SEC)
+#define STARLINK_HANDOVER_START						\
+	(12 * NSEC_PER_SEC - STARLINK_HANDOVER_OFFSET_START * NSEC_PER_MSEC)
+#define STARLINK_HANDOVER_END						\
+	(12 * NSEC_PER_SEC + STARLINK_HANDOVER_OFFSET_END * NSEC_PER_MSEC)
+#define STARLINK_HANDOVER_INTERVAL	(15 * NSEC_PER_SEC)
 
 #define STARLINK_SYNC_INTERVAL	(1 * NSEC_PER_MIN)
 
@@ -277,8 +299,8 @@ static bool is_starlink_handover(void)
 {
 	u64 nsec;
 
-	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
-	return (STARLINK_SCAN_BEGIN <= nsec && nsec <= STARLINK_SCAN_END);
+	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
+	return (STARLINK_HANDOVER_START <= nsec && nsec <= STARLINK_HANDOVER_END);
 }
 
 static void leo_handover_timer_reset(struct sock *sk)
@@ -287,13 +309,13 @@ static void leo_handover_timer_reset(struct sock *sk)
 	u64 nsec, timo;
 
 	/* XXX: directly compute in jiffies. */
-	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
-	if (nsec < STARLINK_SCAN_BEGIN)
-		timo = (STARLINK_SCAN_BEGIN - nsec);
-	else if (nsec < STARLINK_SCAN_END)
-		timo = (STARLINK_SCAN_END - nsec);
+	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
+	if (nsec < STARLINK_HANDOVER_START)
+		timo = (STARLINK_HANDOVER_START - nsec);
+	else if (nsec < STARLINK_HANDOVER_END)
+		timo = (STARLINK_HANDOVER_END - nsec);
 	else
-		timo = (nsec - STARLINK_SCAN_END + STARLINK_SCAN_INTERVAL);
+		timo = (nsec - STARLINK_HANDOVER_END + STARLINK_HANDOVER_INTERVAL);
 	timo *= HZ;
 	timo /= NSEC_PER_SEC;
 	sk_reset_timer(sk, &ca->handover_timer, jiffies + timo);
@@ -359,10 +381,10 @@ static void leo_handover(struct sock *sk)
 	u64 nsec;
 
 	/* XXX: directly compute in jiffies. */
-	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
-	if (nsec >= STARLINK_SCAN_END)
+	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
+	if (nsec >= STARLINK_HANDOVER_END)
 		leo_handover_end(sk);
-	else if (nsec >= STARLINK_SCAN_BEGIN)
+	else if (nsec >= STARLINK_HANDOVER_START)
 		leo_handover_start(sk);
 	else
 		DP("handover: ???");
