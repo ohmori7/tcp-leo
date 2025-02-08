@@ -68,7 +68,8 @@ static u32 cube_rtt_scale __read_mostly;
 static u32 beta_scale __read_mostly;
 static u64 cube_factor __read_mostly;
 
-static s64 starlink_jiffie_base __read_mostly;
+static s64 starlink_jiffies_base __read_mostly;
+static struct hrtimer starlink_jiffies_sync_timer;
 
 /* Note parameters that are used for precomputing scale factors are read-only */
 module_param(fast_convergence, int, 0644);
@@ -148,19 +149,18 @@ static void cubictcp_init(struct sock *sk)
 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
 }
 
-#define NSEC_PER_MIN		(60 * NSEC_PER_SEC)
+#define SEC_PER_MIN		60
+#define NSEC_PER_MIN		(SEC_PER_MIN * NSEC_PER_SEC)
 #define STARLINK_SCAN_BEGIN	(12 * NSEC_PER_SEC - 200 * NSEC_PER_MSEC)
 #define STARLINK_SCAN_END	(12 * NSEC_PER_SEC + 200 * NSEC_PER_MSEC)
 #define STARLINK_SCAN_INTERVAL	(15 * NSEC_PER_SEC)
 
-/*
- * starlink does scan or handover at the fixed timing,
- * 12s, 27s, 42s, 57s for each minute.
- * XXX: only at 27s, handover occurs???
- */
-static void starlink_time_init(void)
+#define STARLINK_SYNC_INTERVAL	(1 * NSEC_PER_MIN)
+
+static s64 starlink_jiffies_base_compute(void)
 {
 	struct timespec64 tv;
+	s64 sjiffies;
 
 	ktime_get_real_ts64(&tv);
 
@@ -169,21 +169,63 @@ static void starlink_time_init(void)
 	 * this may cause a negative value, but it is not
 	 * a problem when computing current seconds later.
 	 */
-#define SEC_PER_MIN	60
-	starlink_jiffie_base = ((tv.tv_sec % SEC_PER_MIN) * NSEC_PER_SEC +
-	    tv.tv_nsec) * HZ;
+	sjiffies = ((tv.tv_sec % SEC_PER_MIN) * NSEC_PER_SEC + tv.tv_nsec) * HZ;
 	/*
 	 * INITIAL_JIFFIES is unnecessary here because
-	 * it will be canceled when computing in starlink_jiffies().
+	 * it will be canceled in starlink_jiffies().
 	 */
-	starlink_jiffie_base -= jiffies_64 * NSEC_PER_SEC;
+	sjiffies -= jiffies_64 * NSEC_PER_SEC;
+
+	return sjiffies;
+}
+
+static void starlink_jiffies_sync_timer_start(void)
+{
+
+	hrtimer_start(&starlink_jiffies_sync_timer,
+	    ktime_set(0, STARLINK_SYNC_INTERVAL), HRTIMER_MODE_REL_PINNED_SOFT);
+}
+
+static enum hrtimer_restart starlink_jiffies_sync(struct hrtimer *hrt)
+{
+	s64 njiffies;
+
+	starlink_jiffies_sync_timer_start();
+
+	njiffies = starlink_jiffies_base_compute();
+
+	DP("sync jiffies: old jiffies: %lld, new jiffies: %lld, diff %lld.%09lld\n",
+	    starlink_jiffies_base, njiffies,
+	    ((njiffies - starlink_jiffies_base + HZ / 2) / HZ / NSEC_PER_SEC) % SEC_PER_MIN,
+	    (((njiffies - starlink_jiffies_base + HZ / 2) / HZ) % NSEC_PER_SEC) *
+	    ((njiffies >= starlink_jiffies_base) ? 1LL : -1LL));
+
+	/* do not strictly care the race condition. */
+	starlink_jiffies_base = njiffies;
+
+	return HRTIMER_NORESTART;
+}
+
+static void starlink_time_init(void)
+{
+
+	hrtimer_init(&starlink_jiffies_sync_timer, CLOCK_REALTIME,
+	    HRTIMER_MODE_REL_PINNED_SOFT);
+	starlink_jiffies_sync_timer.function = starlink_jiffies_sync;
+	starlink_jiffies_sync(&starlink_jiffies_sync_timer);
+}
+
+static void starlink_time_finish(void)
+{
+
+	(void)hrtimer_cancel(&starlink_jiffies_sync_timer);
 }
 
 static u64 starlink_jiffies(void)
 {
 	u64 njiffies;
 
-	njiffies = starlink_jiffie_base + jiffies_64 * NSEC_PER_SEC;
+	njiffies = starlink_jiffies_base + jiffies_64 * NSEC_PER_SEC;
 	njiffies %= NSEC_PER_MIN * HZ;
 	return njiffies;
 }
@@ -194,6 +236,11 @@ static u64 starlink_time(void)
 	return (starlink_jiffies() + HZ / 2) / HZ;
 }
 
+/*
+ * starlink does scan or handover at the fixed timing,
+ * 12s, 27s, 42s, 57s for each minute.
+ * XXX: only at 27s, handover occurs???
+ */
 static bool is_starlink_handover(void)
 {
 	u64 nsec;
@@ -637,6 +684,8 @@ static int __init cubictcp_register(void)
 
 static void __exit cubictcp_unregister(void)
 {
+
+	starlink_time_finish();
 	tcp_unregister_congestion_control(&cubictcp);
 }
 
