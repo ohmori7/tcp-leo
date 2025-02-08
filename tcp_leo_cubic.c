@@ -169,7 +169,6 @@ static inline void bictcp_hystart_reset(struct sock *sk)
 	ca->sample_cnt = 0;
 }
 
-/* XXX */
 #ifdef STARLINK_HANDOVER
 static void leo_handover_timer_init(struct sock *sk);
 static void leo_handover_timer_finish(struct sock *sk);
