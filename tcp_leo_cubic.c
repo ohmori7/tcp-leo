@@ -148,7 +148,6 @@ static void cubictcp_init(struct sock *sk)
 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
 }
 
-#define NSEC_PER_HZ		(NSEC_PER_SEC)
 #define NSEC_PER_MIN		(60 * NSEC_PER_SEC)
 #define STARLINK_SCAN_BEGIN	(12 * NSEC_PER_SEC - 200 * NSEC_PER_MSEC)
 #define STARLINK_SCAN_END	(12 * NSEC_PER_SEC + 200 * NSEC_PER_MSEC)
