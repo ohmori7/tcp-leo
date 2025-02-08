@@ -151,7 +151,7 @@ static void cubictcp_init(struct sock *sk)
 #define NSEC_PER_MIN		(60 * NSEC_PER_SEC)
 #define STARLINK_SCAN_BEGIN	(12 * NSEC_PER_SEC - 200 * NSEC_PER_MSEC)
 #define STARLINK_SCAN_END	(12 * NSEC_PER_SEC + 200 * NSEC_PER_MSEC)
-#define STARLINK_SCAN_INTERVAL	15
+#define STARLINK_SCAN_INTERVAL	(15 * NSEC_PER_SEC)
 
 /*
  * starlink does scan or handover at the fixed timing,
@@ -198,7 +198,7 @@ static bool is_starlink_handover(void)
 {
 	u64 nsec;
 
-	nsec = starlink_time() % (STARLINK_SCAN_INTERVAL * NSEC_PER_SEC);
+	nsec = starlink_time() % STARLINK_SCAN_INTERVAL;
 	return (STARLINK_SCAN_BEGIN <= nsec && nsec <= STARLINK_SCAN_END);
 }
 
