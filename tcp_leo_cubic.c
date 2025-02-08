@@ -32,6 +32,7 @@
 #include <linux/timekeeping.h>		/* starlink time */
 #include <net/tcp.h>
 
+#define STARLINK_DEBUG
 #ifdef STARLINK_DEBUG
 #define DP(...)	printk(__VA_ARGS__)
 #else /* STARLINK_DEBUG */
@@ -871,5 +872,5 @@ module_exit(cubictcp_unregister);
 MODULE_AUTHOR("Sangtae Ha, Stephen Hemminger");
 MODULE_AUTHOR("Motoyuki OHMORI");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("TCP LEO CUBIC for starlink");
+MODULE_DESCRIPTION("TCP LEO CUBIC for Starlink");
 MODULE_VERSION("2.3");
