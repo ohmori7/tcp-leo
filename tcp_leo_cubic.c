@@ -32,7 +32,6 @@
 #include <linux/timekeeping.h>		/* starlink time */
 #include <net/tcp.h>
 
-#define STARLINK_DEBUG
 #ifdef STARLINK_DEBUG
 #define DP(...)	printk(__VA_ARGS__)
 #else /* STARLINK_DEBUG */
