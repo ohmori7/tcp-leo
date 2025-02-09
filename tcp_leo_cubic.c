@@ -393,6 +393,7 @@ static void leo_handover_end(struct sock *sk)
 
 static void leo_handover(struct sock *sk)
 {
+	struct tcp_sock *tp = tcp_sk(sk);
 	u64 nsec;
 
 	/* XXX: directly compute in jiffies. */
@@ -401,8 +402,11 @@ static void leo_handover(struct sock *sk)
 		leo_handover_end(sk);
 	else if (nsec >= STARLINK_HANDOVER_START)
 		leo_handover_start(sk);
+	else if (tp->snd_cwnd == 0)
+		leo_handover_end(sk);
 	else
-		DP("handover: ???");
+		/* already handover ended, and resumed. */
+		DP("handover: already handover recovered???");
 	leo_handover_timer_reset(sk);
 }
 
