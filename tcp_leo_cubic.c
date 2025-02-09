@@ -332,14 +332,11 @@ static void leo_handover_start(struct sock *sk)
 	if (tcp_snd_cwnd(tp) == 0)
 		return;
 
+	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
+	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
+
 	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
 	tp->snd_cwnd = 0;
-
-	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
-	    tcp_snd_cwnd(tp),
-	    ca->last_max_cwnd,
-	    ca->last_cwnd,
-	    ca->tcp_cwnd);
 }
 
 static void leo_handover_end(struct sock *sk)
