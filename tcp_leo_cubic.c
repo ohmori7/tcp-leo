@@ -360,7 +360,9 @@ static void leo_handover_start(struct sock *sk)
 static void leo_handover_end(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+#ifdef STARLINK_DEBUG
 	struct bictcp *ca = inet_csk_ca(sk);
+#endif /* STARLINK_DEBUG */
 
 	if (tcp_snd_cwnd(tp) != 0) {
 		DP("handover: end, but already cwnd recovered???\n");
