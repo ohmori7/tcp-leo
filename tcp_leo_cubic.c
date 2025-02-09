@@ -430,6 +430,8 @@ leo_handover_timer_init(struct sock *sk)
 	struct bictcp *ca = inet_csk_ca(sk);
 
 	timer_setup(&ca->handover_timer, leo_handover_cb, 0);
+	if (is_starlink_handover())
+		leo_suspend_transmission(sk);
 	leo_handover_timer_reset(sk);
 	ca->handover_free_pending = false;
 }
