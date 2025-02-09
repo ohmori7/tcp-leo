@@ -352,10 +352,7 @@ static void leo_handover_end(struct sock *sk)
 	tcp_snd_cwnd_set(tp, ca->last_cwnd);
 
 	DP("handover: end: recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
-	    tcp_snd_cwnd(tp),
-	    ca->last_max_cwnd,
-	    ca->last_cwnd,
-	    ca->tcp_cwnd);
+	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
 
 	/* wake up the socket if necessary. */
 	/* open code tcp_data_snd_check() in tcp_input.c. */
