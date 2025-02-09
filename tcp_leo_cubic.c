@@ -452,7 +452,8 @@ leo_handover_timer_finish(struct sock *sk)
 	(void)sk_stop_timer(sk, &ca->handover_timer);
 
 	if (ca->handover_free_pending)
-		sock_hold(sk);
+		sock_put(sk);
+	ca->handover_free_pending = false;
 }
 #endif /* STARLINK_HANDOVER */
 
