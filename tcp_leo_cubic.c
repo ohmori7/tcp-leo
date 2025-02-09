@@ -346,8 +346,10 @@ static void leo_handover_start(struct sock *sk)
 	struct bictcp *ca = inet_csk_ca(sk);
 #endif /* STARLINK_DEBUG */
 
-	if (tcp_snd_cwnd(tp) == 0)
+	if (tcp_snd_cwnd(tp) == 0) {
+		DP("handover: start, but already started???\n");
 		return;
+	}
 
 	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
 	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
