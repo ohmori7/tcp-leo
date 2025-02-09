@@ -304,6 +304,22 @@ static bool is_starlink_handover(void)
 	return (STARLINK_HANDOVER_START <= nsec && nsec <= STARLINK_HANDOVER_END);
 }
 
+static void leo_suspend_transmission(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
+	tp->snd_cwnd = 0;
+}
+
+static void leo_resume_transmission(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	tcp_snd_cwnd_set(tp, ca->last_cwnd);
+}
+
 static void leo_handover_timer_reset(struct sock *sk)
 {
 	struct bictcp *ca = inet_csk_ca(sk);
@@ -336,8 +352,7 @@ static void leo_handover_start(struct sock *sk)
 	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
 	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
 
-	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
-	tp->snd_cwnd = 0;
+	leo_suspend_transmission(sk);
 }
 
 static void leo_handover_end(struct sock *sk)
@@ -350,7 +365,7 @@ static void leo_handover_end(struct sock *sk)
 		return;
 	}
 
-	tcp_snd_cwnd_set(tp, ca->last_cwnd);
+	leo_resume_transmission(sk);
 
 	DP("handover: end: recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
 	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
@@ -386,6 +401,7 @@ static void leo_handover(struct sock *sk)
 		leo_handover_start(sk);
 	else
 		DP("handover: ???");
+	leo_handover_timer_reset(sk);
 }
 
 static void leo_handover_cb(struct timer_list *t)
@@ -395,10 +411,9 @@ static void leo_handover_cb(struct timer_list *t)
 	struct sock *sk = (struct sock *)((uintptr_t)ca - off);
 
 	bh_lock_sock(sk);
-	if (! sock_owned_by_user(sk)) {
+	if (! sock_owned_by_user(sk))
 		leo_handover(sk);
-		leo_handover_timer_reset(sk);
-	} else if (! ca->handover_free_pending) {
+	else if (! ca->handover_free_pending) {
 		/* delegate our work to tcp_release_cb(). */
 		sock_hold(sk);
 		ca->handover_free_pending = true;
