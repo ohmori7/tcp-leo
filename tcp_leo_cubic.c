@@ -646,8 +646,10 @@ static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 
 #ifdef STARLINK_HANDOVER
 	if (is_starlink_handover()) {
-		if (tcp_snd_cwnd(tp) != 0)
+		if (tcp_snd_cwnd(tp) != 0) {
+			DP("handover: missing transmission suspension???\n");
 			leo_handover_start(sk);
+		}
 		return;
 	}
 	if (tp->snd_cwnd == 0) {
