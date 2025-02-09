@@ -422,7 +422,7 @@ static void leo_handover_cb(struct timer_list *t)
 	if (! sock_owned_by_user(sk))
 		leo_handover(sk);
 	else if (! ca->handover_free_pending) {
-		/* delegate our work to tcp_release_cb(). */
+		/* delegate our work to leo_release(). */
 		sock_hold(sk);
 		ca->handover_free_pending = true;
 	}
