@@ -317,7 +317,7 @@ static void leo_resume_transmission(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct bictcp *ca = inet_csk_ca(sk);
 
-	tcp_snd_cwnd_set(tp, ca->last_cwnd);
+	tcp_snd_cwnd_set(tp, max(1, ca->last_cwnd));
 }
 
 static void leo_handover_timer_reset(struct sock *sk)
