@@ -328,9 +328,9 @@ static void leo_handover_timer_reset(struct sock *sk)
 	/* XXX: directly compute in jiffies. */
 	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
 	if (nsec < STARLINK_HANDOVER_START)
-		timo = (STARLINK_HANDOVER_START - nsec);
+		timo = STARLINK_HANDOVER_START - nsec;
 	else if (nsec < STARLINK_HANDOVER_END)
-		timo = (STARLINK_HANDOVER_END - nsec);
+		timo = STARLINK_HANDOVER_END - nsec;
 	else
 		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
 	timo *= HZ;
