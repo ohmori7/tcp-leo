@@ -201,9 +201,10 @@ static void leo_release(struct sock *sk)
 }
 
 #ifdef STARLINK_HANDOVER
-#define SEC_PER_MIN		60
-#define NSEC_PER_MIN		(SEC_PER_MIN * NSEC_PER_SEC)
-#define STARLINK_HANDOVER_TIME	(12LLU * NSEC_PER_SEC)
+#define SEC_PER_MIN			60
+#define NSEC_PER_MIN			(SEC_PER_MIN * NSEC_PER_SEC)
+#define STARLINK_HANDOVER_TIME		(12LLU * NSEC_PER_SEC)
+#define STARLINK_HANDOVER_TIME_JITTER	(10LLU * NSEC_PER_MSEC)
 #define STARLINK_HANDOVER_START						\
 	(STARLINK_HANDOVER_TIME - STARLINK_HANDOVER_OFFSET_START * NSEC_PER_MSEC)
 #define STARLINK_HANDOVER_END						\
@@ -323,20 +324,26 @@ static void leo_resume_transmission(struct sock *sk)
 static void leo_handover_timer_reset(struct sock *sk)
 {
 	struct bictcp *ca = inet_csk_ca(sk);
-	u64 nsec, timo;
+	u64 nsec;
+	s64 timo;
 
 	/* XXX: directly compute in jiffies. */
 	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
-	if (nsec < STARLINK_HANDOVER_START)
+	if (nsec < STARLINK_HANDOVER_START + STARLINK_HANDOVER_TIME_JITTER)
 		timo = STARLINK_HANDOVER_START - nsec;
-	else if (nsec < STARLINK_HANDOVER_END)
+	else if (nsec + STARLINK_HANDOVER_TIME_JITTER < STARLINK_HANDOVER_END)
 		timo = STARLINK_HANDOVER_END - nsec;
 	else
 		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
+	DP("handover: timer reset: timo (ms): %lld, start: %llu, time: %llu, "
+	    "end: %llu, int.: %llu, nsec (ms): %llu\n",
+	    timo / NSEC_PER_MSEC, STARLINK_HANDOVER_START, STARLINK_HANDOVER_TIME,
+	    STARLINK_HANDOVER_END, STARLINK_HANDOVER_INTERVAL, nsec);
 	timo *= HZ;
 	timo /= NSEC_PER_SEC;
+	if (timo <= 0)
+		timo = 1;
 	sk_reset_timer(sk, &ca->handover_timer, jiffies + timo);
-	DP("handover: timer reset: timo: %llu\n", timo);
 }
 
 static void leo_handover_start(struct sock *sk)
