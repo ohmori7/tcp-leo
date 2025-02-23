@@ -114,7 +114,7 @@ MODULE_PARM_DESC(hystart_ack_delta_us, "spacing between ack's indicating train (
 module_param(starlink_handover_start_ms, int, 0644);
 MODULE_PARM_DESC(starlink_handover_start_ms, "starting offset of handover (0<=offset<=1000)");
 module_param(starlink_handover_end_ms, int, 0644);
-MODULE_PARM_DESC(starlink_handover_end_ms, "ending offset of handover (0<o=offset<=1000)");
+MODULE_PARM_DESC(starlink_handover_end_ms, "ending offset of handover (0<=offset<=1000)");
 #endif /* STARLINK_HANDOVER */
 
 /* BIC TCP Parameters */
