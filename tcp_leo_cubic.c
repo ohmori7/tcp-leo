@@ -323,18 +323,30 @@ static void leo_resume_transmission(struct sock *sk)
 
 static void leo_handover_timer_reset(struct sock *sk)
 {
+#ifdef LEO_HANDOVER_TIMER_ONLY
+	struct tcp_sock *tp = tcp_sk(sk);
+#endif /* LEO_HANDOVER_TIMER_ONLY */
 	struct bictcp *ca = inet_csk_ca(sk);
 	u64 nsec;
 	s64 timo;
 
 	/* XXX: directly compute in jiffies. */
 	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
+#ifdef LEO_HANDOVER_TIMER_ONLY
+	if (tp->snd_cwnd == 0)
+		timo = STARLINK_HANDOVER_END - nsec;
+	else if (nsec <= STARLINK_HANDOVER_TIME)
+		timo = STARLINK_HANDOVER_START - nsec;
+	else
+		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
+#else /* LEO_HANDOVER_TIMER_ONLY */
 	if (nsec < STARLINK_HANDOVER_START + STARLINK_HANDOVER_TIME_JITTER)
 		timo = STARLINK_HANDOVER_START - nsec;
 	else if (nsec + STARLINK_HANDOVER_TIME_JITTER < STARLINK_HANDOVER_END)
 		timo = STARLINK_HANDOVER_END - nsec;
 	else
 		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
+#endif /* ! LEO_HANDOVER_TIMER_ONLY */
 	DP("handover: timer reset: timo (ms): %lld, start: %llu, time: %llu, "
 	    "end: %llu, int.: %llu, nsec (ms): %llu\n",
 	    timo / NSEC_PER_MSEC, STARLINK_HANDOVER_START, STARLINK_HANDOVER_TIME,
@@ -402,6 +414,14 @@ static void leo_handover_end(struct sock *sk)
 
 static void leo_handover(struct sock *sk)
 {
+#ifdef LEO_HANDOVER_TIMER_ONLY
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (tp->snd_cwnd != 0)
+		leo_handover_start(sk);
+	else
+		leo_handover_end(sk);
+#else /* LEO_HANDOVER_TIMER_ONLY  */
 	struct tcp_sock *tp = tcp_sk(sk);
 	u64 nsec;
 
@@ -416,6 +436,7 @@ static void leo_handover(struct sock *sk)
 	else
 		/* already handover ended, and resumed. */
 		DP("handover: already handover recovered???");
+#endif /* ! LEO_HANDOVER_TIMER_ONLY  */
 	leo_handover_timer_reset(sk);
 }
 
@@ -655,6 +676,10 @@ static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 		return;
 
 #ifdef STARLINK_HANDOVER
+#ifdef LEO_HANDOVER_TIMER_ONLY
+	if (tcp_snd_cwnd(tp) == 0)
+		return;
+#else /* LEO_HANDOVER_TIMER_ONLY */
 	if (is_starlink_handover()) {
 		if (tcp_snd_cwnd(tp) != 0) {
 			DP("handover: missing transmission suspension???\n");
@@ -666,6 +691,7 @@ static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 		DP("handover: unrecovered??? forcely recover cwnd.\n");
 		leo_handover_end(sk);
 	}
+#endif /* ! LEO_HANDOVER_TIMER_ONLY */
 #endif /* STALRLINK_HANDOVER */
 
 	if (tcp_in_slow_start(tp)) {
