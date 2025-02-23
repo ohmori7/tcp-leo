@@ -308,6 +308,10 @@ static bool is_starlink_handover(void)
 static void leo_suspend_transmission(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	/* XXX: should compute cwnd??? */
+	ca->last_cwnd = tcp_snd_cwnd(tp);
 
 	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
 	tp->snd_cwnd = 0;
