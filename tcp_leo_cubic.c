@@ -214,7 +214,7 @@ static void leo_release(struct sock *sk)
 	(STARLINK_HANDOVER_TIME + STARLINK_HANDOVER_OFFSET_END * NSEC_PER_MSEC * HZ)
 #define STARLINK_HANDOVER_INTERVAL	(15LLU * NSEC_PER_SEC * HZ)
 
-#define STARLINK_SYNC_INTERVAL	(1LLU * NSEC_PER_MIN)
+#define STARLINK_SYNC_INTERVAL		(1LLU * NSEC_PER_MIN)
 
 static s64 starlink_jiffies_base_compute(void)
 {
