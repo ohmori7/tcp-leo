@@ -24,22 +24,25 @@
  * this behaves the same as the original Reno.
  */
 
+#define STARLINK_HANDOVER
+/* #define STARLINK_DEBUG */
+/* #define LEO_HANDOVER_TIMER_ONLY */
+
 #include <linux/mm.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
 #include <linux/module.h>
 #include <linux/math64.h>
-#include <linux/timekeeping.h>		/* starlink time */
+#ifdef STARLINK_HANDOVER
+#include <linux/timekeeping.h>		/* for ktime_get_real_ts64() */
+#endif /* STARLINK_HANDOVER */
 #include <net/tcp.h>
 
-#define STARLINK_DEBUG
 #ifdef STARLINK_DEBUG
 #define DP(...)	printk(__VA_ARGS__)
 #else /* STARLINK_DEBUG */
 #define DP(...)
 #endif /* ! STARLINK_DEBUG */
-
-#define STARLINK_HANDOVER
 
 #define BICTCP_BETA_SCALE    1024	/* Scale factor beta calculation
 					 * max_cwnd = snd_cwnd * beta
