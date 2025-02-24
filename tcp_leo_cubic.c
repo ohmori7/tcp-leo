@@ -370,12 +370,13 @@ static void leo_handover_start(struct sock *sk)
 #endif /* STARLINK_DEBUG */
 
 	if (tcp_snd_cwnd(tp) == 0) {
-		DP("handover: start, but already started???\n");
+		DP("handover: start: already started???\n");
 		return;
 	}
 
-	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
-	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
+	DP("handover: start: cwnd: %d, last max: %d, last: %d, tcp: %d, inflight: %d\n",
+	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd,
+	    tcp_packets_in_flight(tp));
 
 	leo_suspend_transmission(sk);
 }
@@ -388,14 +389,15 @@ static void leo_handover_end(struct sock *sk)
 #endif /* STARLINK_DEBUG */
 
 	if (tcp_snd_cwnd(tp) != 0) {
-		DP("handover: end, but already cwnd recovered???\n");
+		DP("handover: end: already cwnd recovered???\n");
 		return;
 	}
 
 	leo_resume_transmission(sk);
 
-	DP("handover: end: recover: cwnd: %d, last max: %d, last: %d, tcp: %d\n",
-	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd);
+	DP("handover: end: recover: cwnd: %d, last max: %d, last: %d, tcp: %d, inflight: %d\n",
+	    tcp_snd_cwnd(tp), ca->last_max_cwnd, ca->last_cwnd, ca->tcp_cwnd,
+	    tcp_packets_in_flight(tp));
 
 	/* wake up the socket if necessary. */
 	/* open code tcp_data_snd_check() in tcp_input.c. */
