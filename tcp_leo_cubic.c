@@ -344,9 +344,9 @@ static void leo_handover_timer_reset(struct sock *sk)
 	else
 		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
 #else /* LEO_HANDOVER_TIMER_ONLY */
-	if (nsec < STARLINK_HANDOVER_START + STARLINK_HANDOVER_TIME_JITTER)
+	if (nsec < STARLINK_HANDOVER_START)
 		timo = STARLINK_HANDOVER_START - nsec;
-	else if (nsec + STARLINK_HANDOVER_TIME_JITTER < STARLINK_HANDOVER_END)
+	else if (nsec < STARLINK_HANDOVER_END)
 		timo = STARLINK_HANDOVER_END - nsec;
 	else
 		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
@@ -431,9 +431,9 @@ static void leo_handover(struct sock *sk)
 
 	/* XXX: directly compute in jiffies. */
 	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
-	if (nsec >= STARLINK_HANDOVER_END)
+	if (nsec + STARLINK_HANDOVER_TIME_JITTER >= STARLINK_HANDOVER_END)
 		leo_handover_end(sk);
-	else if (nsec >= STARLINK_HANDOVER_START)
+	else if (nsec + STARLINK_HANDOVER_TIME_JITTER >= STARLINK_HANDOVER_START)
 		leo_handover_start(sk);
 	else if (tp->snd_cwnd == 0)
 		leo_handover_end(sk);
