@@ -289,11 +289,13 @@ static u64 starlink_jiffies(void)
 	return njiffies;
 }
 
+#ifdef STARLINK_DEBUG
 static u64 starlink_time(void)
 {
 
 	return (starlink_jiffies() + HZ / 2) / HZ;
 }
+#endif /* STARLINK_DEBUG */
 
 /*
  * starlink does scan or handover at the fixed timing,
