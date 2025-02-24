@@ -203,13 +203,13 @@ static void leo_release(struct sock *sk)
 #ifdef STARLINK_HANDOVER
 #define SEC_PER_MIN			60
 #define NSEC_PER_MIN			(SEC_PER_MIN * NSEC_PER_SEC)
-#define STARLINK_HANDOVER_TIME		(12LLU * NSEC_PER_SEC)
-#define STARLINK_HANDOVER_TIME_JITTER	(10LLU * NSEC_PER_MSEC)
+#define STARLINK_HANDOVER_TIME		(12LLU * NSEC_PER_SEC * HZ)
+#define STARLINK_HANDOVER_TIME_JITTER	(10LLU * NSEC_PER_MSEC * HZ)
 #define STARLINK_HANDOVER_START						\
-	(STARLINK_HANDOVER_TIME - STARLINK_HANDOVER_OFFSET_START * NSEC_PER_MSEC)
+	(STARLINK_HANDOVER_TIME - STARLINK_HANDOVER_OFFSET_START * NSEC_PER_MSEC * HZ)
 #define STARLINK_HANDOVER_END						\
-	(STARLINK_HANDOVER_TIME + STARLINK_HANDOVER_OFFSET_END * NSEC_PER_MSEC)
-#define STARLINK_HANDOVER_INTERVAL	(15LLU * NSEC_PER_SEC)
+	(STARLINK_HANDOVER_TIME + STARLINK_HANDOVER_OFFSET_END * NSEC_PER_MSEC * HZ)
+#define STARLINK_HANDOVER_INTERVAL	(15LLU * NSEC_PER_SEC * HZ)
 
 #define STARLINK_SYNC_INTERVAL	(1LLU * NSEC_PER_MIN)
 
@@ -299,10 +299,11 @@ static u64 starlink_time(void)
  */
 static bool is_starlink_handover(void)
 {
-	u64 nsec;
+	u64 njiffies;
 
-	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
-	return (STARLINK_HANDOVER_START <= nsec && nsec <= STARLINK_HANDOVER_END);
+	njiffies = starlink_jiffies() % STARLINK_HANDOVER_INTERVAL;
+	return STARLINK_HANDOVER_START <= njiffies &&
+	    njiffies <= STARLINK_HANDOVER_END;
 }
 
 static void leo_suspend_transmission(struct sock *sk)
@@ -331,31 +332,32 @@ static void leo_handover_timer_reset(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 #endif /* LEO_HANDOVER_TIMER_ONLY */
 	struct bictcp *ca = inet_csk_ca(sk);
-	u64 nsec;
+	u64 njiffies;
 	s64 timo;
 
-	/* XXX: directly compute in jiffies. */
-	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
+	njiffies = starlink_jiffies() % STARLINK_HANDOVER_INTERVAL;
 #ifdef LEO_HANDOVER_TIMER_ONLY
 	if (tp->snd_cwnd == 0)
-		timo = STARLINK_HANDOVER_END - nsec;
-	else if (nsec <= STARLINK_HANDOVER_TIME)
-		timo = STARLINK_HANDOVER_START - nsec;
+		timo = STARLINK_HANDOVER_END - njiffies;
+	else if (njiffies <= STARLINK_HANDOVER_TIME)
+		timo = STARLINK_HANDOVER_START - njiffies;
 	else
-		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
+		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL
+		    - njiffies;
 #else /* LEO_HANDOVER_TIMER_ONLY */
-	if (nsec < STARLINK_HANDOVER_START)
-		timo = STARLINK_HANDOVER_START - nsec;
-	else if (nsec < STARLINK_HANDOVER_END)
-		timo = STARLINK_HANDOVER_END - nsec;
+	if (njiffies < STARLINK_HANDOVER_START)
+		timo = STARLINK_HANDOVER_START - njiffies;
+	else if (njiffies < STARLINK_HANDOVER_END)
+		timo = STARLINK_HANDOVER_END - njiffies;
 	else
-		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL - nsec;
+		timo = STARLINK_HANDOVER_START + STARLINK_HANDOVER_INTERVAL
+		    - njiffies;
 #endif /* ! LEO_HANDOVER_TIMER_ONLY */
 	DP("handover: timer reset: timo (ms): %lld, start: %llu, time: %llu, "
 	    "end: %llu, int.: %llu, nsec (ms): %llu\n",
-	    timo / NSEC_PER_MSEC, STARLINK_HANDOVER_START, STARLINK_HANDOVER_TIME,
-	    STARLINK_HANDOVER_END, STARLINK_HANDOVER_INTERVAL, nsec);
-	timo *= HZ;
+	    timo / NSEC_PER_MSEC / HZ, STARLINK_HANDOVER_START / HZ,
+	    STARLINK_HANDOVER_TIME / HZ, STARLINK_HANDOVER_END / HZ,
+	    STARLINK_HANDOVER_INTERVAL / HZ, njiffies / HZ);
 	timo /= NSEC_PER_SEC;
 	if (timo <= 0)
 		timo = 1;
@@ -429,13 +431,12 @@ static void leo_handover(struct sock *sk)
 		leo_handover_end(sk);
 #else /* LEO_HANDOVER_TIMER_ONLY  */
 	struct tcp_sock *tp = tcp_sk(sk);
-	u64 nsec;
+	u64 njiffies;
 
-	/* XXX: directly compute in jiffies. */
-	nsec = starlink_time() % STARLINK_HANDOVER_INTERVAL;
-	if (nsec + STARLINK_HANDOVER_TIME_JITTER >= STARLINK_HANDOVER_END)
+	njiffies = starlink_jiffies() % STARLINK_HANDOVER_INTERVAL;
+	if (njiffies + STARLINK_HANDOVER_TIME_JITTER >= STARLINK_HANDOVER_END)
 		leo_handover_end(sk);
-	else if (nsec + STARLINK_HANDOVER_TIME_JITTER >= STARLINK_HANDOVER_START)
+	else if (njiffies + STARLINK_HANDOVER_TIME_JITTER >= STARLINK_HANDOVER_START)
 		leo_handover_start(sk);
 	else if (tp->snd_cwnd == 0)
 		leo_handover_end(sk);
