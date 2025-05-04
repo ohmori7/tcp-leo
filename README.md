@@ -7,7 +7,8 @@ sudo apt install build-essential linux-headers-$(uname -r) gcc
 ```
 - build kernel module.
 ```
-% cd $(THIS_DIRECTORY)
+% git clone https://github.com/ohmori7/tcp-leo.git
+% cd tcp-leo
 % make
 % sudo insmod leo_cubic.ko
 % sudo sysctl -w net.ipv4.tcp_allowed_congestion_control="reno cubic leo-cubic"
