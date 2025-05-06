@@ -1,5 +1,5 @@
 # in-tree kernel variable.
-obj-m := tcp_leo_cubic.o tcp_leo_bbrv1.o
+obj-m := tcp_leo.o tcp_leo_cubic.o tcp_leo_bbrv1.o
 
 # out-of-tree rules.
 DIR=	/lib/modules/`uname -r`/build

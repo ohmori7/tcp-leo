@@ -1,3 +1,4 @@
+#define TCP_LEO_BBR
 /* Bottleneck Bandwidth and RTT (BBR) congestion control
  *
  * BBR congestion control computes the sending rate based on the delivery
@@ -64,6 +65,10 @@
 #include <linux/inet.h>
 #include <linux/random.h>
 #include <linux/win_minmax.h>
+
+#ifdef TCP_LEO_BBR
+#include "tcp_leo.h"
+#endif /* TCP_LEO_BBR */
 
 /* Scale factor for rate in pkt/uSec unit to avoid truncation in bandwidth
  * estimation. The rate unit ~= (1500 bytes / 1 usec / 2^24) ~= 715 bps.
@@ -1029,6 +1034,11 @@ __bpf_kfunc static void bbr_main(struct sock *sk, const struct rate_sample *rs)
 	struct bbr *bbr = inet_csk_ca(sk);
 	u32 bw;
 
+#ifdef TCP_LEO_BBR
+	if (leo_handover_check(sk, bbr->prior_cwnd))
+		return;
+#endif /* TCP_LEO_BBR */
+
 	bbr_update_model(sk, rs);
 
 	bw = bbr_bw(sk);
@@ -1076,6 +1086,9 @@ __bpf_kfunc static void bbr_init(struct sock *sk)
 	bbr->extra_acked[1] = 0;
 
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
+#ifdef TCP_LEO_BBR
+	leo_init(sk, &bbr->prior_cwnd);
+#endif /* TCP_LEO_BBR */
 }
 
 __bpf_kfunc static u32 bbr_sndbuf_expand(struct sock *sk)
