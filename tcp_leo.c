@@ -282,7 +282,6 @@ leo_handover_check(struct sock *sk, u32 last_snd_cwnd)
 	}
 	if (tcp_snd_cwnd(tp) == 0) {
 		DP("handover: unrecovered??? forcely recover cwnd.\n");
-		last_snd_cwnd = max(last_snd_cwnd, tcp_snd_cwnd(tp));
 		leo_handover_end(sk, last_snd_cwnd);
 	}
 #endif /* ! LEO_HANDOVER_TIMER_ONLY */
