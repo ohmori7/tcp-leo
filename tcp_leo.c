@@ -5,12 +5,12 @@
 
 #include "tcp_leo.h"
 
-#define LEO_DEBUG
-#ifdef LEO_DEBUG
-#define DP(...)	printk(__VA_ARGS__)
-#else /* LEO_DEBUG */
+#ifdef LEO_NODEBUG
 #define DP(...)
-#endif /* ! LEO_DEBUG */
+#else /* LEO_NODEBUG */
+static bool leo_debug __read_mostly = false;
+#define DP(...)	if (leo_debug) printk(__VA_ARGS__)
+#endif /* ! LEO_NODEBUG */
 
 #define LEO_SOCKET(leo)	((leo)->sock)
 
@@ -45,6 +45,8 @@ static struct hrtimer leo_jiffies_sync_timer;
 /* XXX */
 static void leo_finish(struct leo *);
 
+module_param(leo_debug, bool, 0644);
+MODULE_PARM_DESC(leo_debug, "debug flag");
 module_param(leo_handover_start_ms, int, 0644);
 MODULE_PARM_DESC(leo_handover_start_ms, "starting offset of handover (0<=offset<=1000)");
 module_param(leo_handover_end_ms, int, 0644);
@@ -129,14 +131,14 @@ leo_jiffies(void)
 	return njiffies;
 }
 
-#ifdef LEO_DEBUG
+#if ! defined(LEO_NODEBUG)
 static u64
 leo_time(void)
 {
 
 	return (leo_jiffies() + HZ / 2) / HZ;
 }
-#endif /* LEO_DEBUG */
+#endif /* ! LEO_NODEBUG */
 
 /*
  * leo does scan or handover at the fixed timing,
