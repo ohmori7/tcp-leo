@@ -488,6 +488,7 @@ __bpf_kfunc static void cubictcp_acked(struct sock *sk, const struct ack_sample 
 }
 
 static struct tcp_congestion_ops cubictcp __read_mostly = {
+	.flags		= TCP_CONG_NON_RESTRICTED,
 	.init		= cubictcp_init,
 	.ssthresh	= cubictcp_recalc_ssthresh,
 	.cong_avoid	= cubictcp_cong_avoid,
