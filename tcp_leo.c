@@ -375,6 +375,15 @@ leo_finish(struct leo *leo)
 	DP("free: %p\n", leo);
 }
 
+#if 0
+static void
+leo_release(struct sock *sk)
+{
+
+	leo_handover_timer_finish(sk);
+}
+#endif /* 0 */
+
 BTF_SET8_START(leo_check_kfunc_ids)
 #ifdef CONFIG_X86
 #ifdef CONFIG_DYNAMIC_FTRACE
@@ -383,7 +392,9 @@ BTF_ID_FLAGS(func, leo_resume_transmission)
 BTF_ID_FLAGS(func, leo_handover_cb)
 BTF_ID_FLAGS(func, leo_init)
 BTF_ID_FLAGS(func, leo_finish)
+#if 0
 BTF_ID_FLAGS(func, leo_release)
+#endif /* 0 */
 #endif
 #endif
 BTF_SET8_END(leo_check_kfunc_ids)
