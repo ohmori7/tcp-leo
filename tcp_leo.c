@@ -153,7 +153,7 @@ is_leo_handover(void)
 	    njiffies <= LEO_HANDOVER_END;
 }
 
-static void
+__bpf_kfunc static void
 leo_suspend_transmission(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -167,7 +167,7 @@ leo_suspend_transmission(struct sock *sk)
 	tp->snd_cwnd = 0;
 }
 
-static void
+__bpf_kfunc static void
 leo_resume_transmission(struct sock *sk, u32 last_snd_cwnd)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -317,7 +317,7 @@ leo_handover(struct leo *leo)
 	leo_handover_timer_reset(leo);
 }
 
-static void
+__bpf_kfunc static void
 leo_handover_cb(struct timer_list *t)
 {
 	struct leo *leo = from_timer(leo, t, handover_timer);
@@ -340,7 +340,7 @@ leo_handover_cb(struct timer_list *t)
 	leo_finish(leo);
 }
 
-void
+__bpf_kfunc void
 leo_init(struct sock *sk, u32 *last_snd_cwnd)
 {
 	struct leo *leo;
@@ -361,7 +361,7 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 }
 EXPORT_SYMBOL(leo_init);
 
-static void
+__bpf_kfunc static void
 leo_finish(struct leo *leo)
 {
 	struct sock *sk = LEO_SOCKET(leo);
