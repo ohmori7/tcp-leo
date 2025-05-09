@@ -10,7 +10,6 @@ struct leo {
 	struct timer_list handover_timer;
 	void *sock;
 	u32 *last_snd_cwnd;
-	bool handover_free_pending;
 };
 
 bool leo_handover_check(struct sock *, u32);
