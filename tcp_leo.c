@@ -5,12 +5,8 @@
 
 #include "tcp_leo.h"
 
-#ifdef LEO_NODEBUG
-#define DP(...)
-#else /* LEO_NODEBUG */
-static bool leo_debug __read_mostly = false;
-#define DP(...)	if (leo_debug) printk(__VA_ARGS__)
-#endif /* ! LEO_NODEBUG */
+bool leo_debug __read_mostly = false;
+EXPORT_SYMBOL(leo_debug);
 
 #define LEO_SOCKET(leo)	((leo)->sock)
 

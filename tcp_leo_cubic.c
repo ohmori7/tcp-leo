@@ -150,8 +150,18 @@ __bpf_kfunc static void cubictcp_init(struct sock *sk)
 
 __bpf_kfunc static void cubictcp_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	if (event == CA_EVENT_LOSS) {
+		struct tcp_sock *tp = tcp_sk(sk);
+
+		if (tp->prior_cwnd == 0) {
+			tp->prior_cwnd = ca->last_cwnd;
+			DP("LEO[%p] recover zero prior cwnd: %u", sk, ca->last_cwnd);
+		}
+		return;
+	}
 	if (event == CA_EVENT_TX_START) {
-		struct bictcp *ca = inet_csk_ca(sk);
 		u32 now = tcp_jiffies32;
 		s32 delta;
 

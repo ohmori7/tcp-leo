@@ -1,3 +1,10 @@
+#ifdef LEO_NODEBUG
+#define DP(...)
+#else /* LEO_NODEBUG */
+bool leo_debug __read_mostly;
+#define DP(...)	if (leo_debug) printk(__VA_ARGS__)
+#endif /* ! LEO_NODEBUG */
+
 /*
  * We could not hold hrtimer here in struct bictcp because of
  * build failure of sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE.
