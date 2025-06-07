@@ -1,4 +1,3 @@
-#define TCP_LEO_BBR
 /* Bottleneck Bandwidth and RTT (BBR) congestion control
  *
  * BBR congestion control computes the sending rate based on the delivery
@@ -1155,7 +1154,11 @@ __bpf_kfunc static void bbr_set_state(struct sock *sk, u8 new_state)
 
 static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 	.flags		= TCP_CONG_NON_RESTRICTED,
+#ifdef TCP_LEO_BBR
 	.name		= "leo-bbrv1",
+#else /* TCP_LEO_BBR */
+	.name		= "bbrv1",
+#endif /* ! TCP_LEO_BBR */
 	.owner		= THIS_MODULE,
 	.init		= bbr_init,
 	.cong_control	= bbr_main,
@@ -1212,6 +1215,10 @@ MODULE_AUTHOR("Van Jacobson <vanj@google.com>");
 MODULE_AUTHOR("Neal Cardwell <ncardwell@google.com>");
 MODULE_AUTHOR("Yuchung Cheng <ycheng@google.com>");
 MODULE_AUTHOR("Soheil Hassas Yeganeh <soheil@google.com>");
-MODULE_AUTHOR("Motoyuki OHMORI <ohmori@tottori-u.ac.jp>");
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef TCP_LEO_BBR
+MODULE_AUTHOR("Motoyuki OHMORI <ohmori@tottori-u.ac.jp>");
 MODULE_DESCRIPTION("TCP LEO BBR (Bottleneck Bandwidth and RTT) for Starlink");
+#else /* TCP_LEO_BBR */
+MODULE_DESCRIPTION("TCP BBRv1 (Bottleneck Bandwidth and RTT version 1)");
+#endif /* ! TCP_LEO_BBR */

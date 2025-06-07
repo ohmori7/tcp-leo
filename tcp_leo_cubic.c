@@ -1,4 +1,3 @@
-#define TCP_LEO_CUBIC
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * TCP CUBIC: Binary Increase Congestion control for TCP v2.3
@@ -577,7 +576,12 @@ module_init(cubictcp_register);
 module_exit(cubictcp_unregister);
 
 MODULE_AUTHOR("Sangtae Ha, Stephen Hemminger");
-MODULE_AUTHOR("Motoyuki OHMORI");
 MODULE_LICENSE("GPL");
+#ifdef TCP_LEO_CUBIC
+MODULE_AUTHOR("Motoyuki OHMORI");
 MODULE_DESCRIPTION("TCP LEO CUBIC for Starlink");
+MODULE_VERSION("0.1");
+#else /* TCP_LEO_CUBIC */
+MODULE_DESCRIPTION("CUBIC TCP");
 MODULE_VERSION("2.3");
+#endif /* ! TCP_LEO_CUBIC */
