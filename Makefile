@@ -1,5 +1,5 @@
 # in-tree kernel variable.
-obj-m := tcp_leo.o tcp_leo_cubic.o tcp_leo_bbrv1.o
+obj-m := tcp_leo.o tcp_leo_cubic.o tcp_leo_bbrv1.o tcp_sat_pipe_bbrv1.o
 
 CFLAGS_tcp_leo_cubic.o := -DTCP_LEO_CUBIC
 CFLAGS_tcp_leo_bbrv1.o := -DTCP_LEO_BBR
