@@ -1,3 +1,8 @@
+/*
+ * import SatPipe.c from:
+ *	https://github.com/dzhao99/SatPipe
+ */
+#define SATPIPE
 /* Bottleneck Bandwidth and RTT (BBR) congestion control
  *
  * BBR congestion control computes the sending rate based on the delivery
@@ -64,6 +69,20 @@
 #include <linux/inet.h>
 #include <linux/random.h>
 #include <linux/win_minmax.h>
+#ifdef SATPIPE
+#include <linux/timekeeping.h>
+
+#include <linux/fs.h>
+#include <asm/segment.h>
+#include <asm/uaccess.h>
+#include <linux/buffer_head.h>
+#include <linux/kthread.h>
+#include <linux/irqflags.h>
+#include <linux/kernel.h>
+#include <linux/netlink.h>
+#include <net/netlink.h>
+#include <net/net_namespace.h>
+#endif /* SATPIPE */
 
 /* Scale factor for rate in pkt/uSec unit to avoid truncation in bandwidth
  * estimation. The rate unit ~= (1500 bytes / 1 usec / 2^24) ~= 715 bps.
@@ -132,9 +151,17 @@ struct bbr {
 /* Window length of bw filter (in rounds): */
 static const int bbr_bw_rtts = CYCLE_LEN + 2;
 /* Window length of min_rtt filter (in sec): */
+#ifdef SATPIPE
+static const u32 bbr_min_rtt_win_sec = 20;
+#else /* SATPIPE */
 static const u32 bbr_min_rtt_win_sec = 10;
+#endif /* ! SATPIPE */
 /* Minimum time (in ms) spent at bbr_cwnd_min_target in BBR_PROBE_RTT mode: */
+#ifdef SATPIPE
+static const u32 bbr_probe_rtt_mode_ms = 300;
+#else /* SATPIPE */
 static const u32 bbr_probe_rtt_mode_ms = 200;
+#endif /* ! SATPIPE */
 /* Skip TSO below the following bandwidth (bits/sec): */
 static const int bbr_min_tso_rate = 1200000;
 
@@ -202,6 +229,15 @@ static const u32 bbr_ack_epoch_acked_reset_thresh = 1U << 20;
 static const u32 bbr_extra_acked_max_us = 100 * 1000;
 
 static void bbr_check_probe_rtt_done(struct sock *sk);
+
+#ifdef SATPIPE
+static long long int system_time_sec;
+static long int system_time_nsec;
+static int relative_time_sec;
+static const int8_t OFFSET = 12;
+static const int8_t PERIOD = 15;
+static bool active_flag = false;
+#endif /* SATPIPE */
 
 /* Do we estimate that STARTUP filled the pipe? */
 static bool bbr_full_bw_reached(const struct sock *sk)
@@ -764,6 +800,11 @@ static void bbr_update_bw(struct sock *sk, const struct rate_sample *rs)
 	struct bbr *bbr = inet_csk_ca(sk);
 	u64 bw;
 
+#ifdef SATPIPE
+	struct timespec64 ts;
+	ktime_get_real_ts64(&ts);
+#endif /* SATPIPE */
+
 	bbr->round_start = 0;
 	if (rs->delivered < 0 || rs->interval_us <= 0)
 		return; /* Not a valid observation */
@@ -799,6 +840,25 @@ static void bbr_update_bw(struct sock *sk, const struct rate_sample *rs)
 		/* Incorporate new sample into our max bw filter. */
 		minmax_running_max(&bbr->bw, bbr_bw_rtts, bbr->rtt_cnt, bw);
 	}
+#ifdef SATPIPE
+    system_time_sec = (long long)ts.tv_sec;
+	system_time_nsec =  (long)ts.tv_nsec;
+	relative_time_sec = system_time_sec % PERIOD;
+
+    if (relative_time_sec == (OFFSET - 2)){
+        active_flag = true;
+    }
+    
+    if (active_flag){
+        if (relative_time_sec == (OFFSET - 1) && system_time_nsec >= 950000000){
+            active_flag = false;
+            bbr->mode = BBR_PROBE_RTT;
+		    bbr_save_cwnd(sk);
+		    bbr->probe_rtt_done_stamp = 0;
+            printk("START RTT PROBING: [%lld.%ld]\n",ts.tv_sec, ts.tv_nsec);
+        }
+    }
+#endif /* SATPIPE */
 }
 
 /* Estimates the windowed max degree of ack aggregation.
