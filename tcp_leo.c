@@ -245,6 +245,14 @@ leo_handover_end(struct sock *sk, u32 last_snd_cwnd)
 
 	/* wake up the socket if necessary. */
 	/* open code tcp_data_snd_check() in tcp_input.c. */
+#ifdef TCP_LEO
+	/*
+	 * XXX: these functions are not exported by default, and
+	 *	thus require kernel modifications.
+	 */
+	tcp_push_pending_frames(sk);
+	tcp_check_space(sk);
+#else /* TCP_LEO */
 	/*
 	 * XXX: should call tcp_push_pending_frames(),
 	 * but symbol is missing...
@@ -259,6 +267,7 @@ leo_handover_end(struct sock *sk, u32 last_snd_cwnd)
 		 */
 		(*sk->sk_write_space)(sk);
 	}
+#endif /* ! TCP_LEO */
 }
 
 bool
