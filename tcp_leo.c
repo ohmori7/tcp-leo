@@ -185,6 +185,32 @@ leo_resume_transmission(struct sock *sk, u32 last_snd_cwnd)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	tcp_snd_cwnd_set(tp, max(1, last_snd_cwnd));
+
+	/* wake up the socket if necessary. */
+	/* open code of tcp_data_snd_check() in tcp_input.c. */
+#ifdef TCP_LEO
+	/*
+	 * XXX: these functions are not exported by default, and
+	 *	thus require kernel modifications.
+	 */
+	tcp_push_pending_frames(sk);
+	tcp_check_space(sk);
+#else /* TCP_LEO */
+	/*
+	 * XXX: should call tcp_push_pending_frames(),
+	 * but symbol is missing...
+	 */
+	if (sk->sk_socket &&
+	    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
+		DP("LEO[%p]: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u\n",
+		    sk, READ_ONCE(sk->sk_sndbuf), READ_ONCE(sk->sk_wmem_queued));
+		/*
+		 * we cannot use INDIRECT_CALL_1() here.
+		 * INDIRECT_CALL_1(sk->sk_write_space, sk_stream_write_space, sk);
+		 */
+		(*sk->sk_write_space)(sk);
+	}
+#endif /* ! TCP_LEO */
 }
 
 static void
@@ -256,32 +282,6 @@ leo_handover_end(struct sock *sk, u32 last_snd_cwnd)
 
 	DP("LEO[%p]: handover: end: recover: cwnd: %d, inflight: %d\n",
 	    sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
-
-	/* wake up the socket if necessary. */
-	/* open code tcp_data_snd_check() in tcp_input.c. */
-#ifdef TCP_LEO
-	/*
-	 * XXX: these functions are not exported by default, and
-	 *	thus require kernel modifications.
-	 */
-	tcp_push_pending_frames(sk);
-	tcp_check_space(sk);
-#else /* TCP_LEO */
-	/*
-	 * XXX: should call tcp_push_pending_frames(),
-	 * but symbol is missing...
-	 */
-	if (sk->sk_socket &&
-	    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
-		DP("LEO[%p]: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u\n",
-		    sk, READ_ONCE(sk->sk_sndbuf), READ_ONCE(sk->sk_wmem_queued));
-		/*
-		 * we cannot use INDIRECT_CALL_1() here.
-		 * INDIRECT_CALL_1(sk->sk_write_space, sk_stream_write_space, sk);
-		 */
-		(*sk->sk_write_space)(sk);
-	}
-#endif /* ! TCP_LEO */
 }
 
 bool
