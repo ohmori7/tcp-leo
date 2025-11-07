@@ -151,10 +151,19 @@ is_leo_handover(void)
 	    njiffies <= LEO_HANDOVER_END;
 }
 
+static unsigned long
+leo_handover_duration(struct sock *sk)
+{
+
+	(void)sk; /* XXX: different duration per socket in future. */
+	return leo_handover_start_ms + leo_handover_end_ms;
+}
+
 __bpf_kfunc static void
 leo_suspend_transmission(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	struct inet_connection_sock *icsk = inet_csk(sk);
 
 #if 0	/* XXX: no space to hold last_snd_cwnd... */
 	/* XXX: should compute cwnd??? */
@@ -163,6 +172,11 @@ leo_suspend_transmission(struct sock *sk)
 
 	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
 	tp->snd_cwnd = 0;
+
+	/* extend retransmission and other timeouts. */
+	/* XXX: consider timer granularity for more accuracy. */
+	if (icsk->icsk_timeout != 0)
+		icsk->icsk_timeout += msecs_to_jiffies(leo_handover_duration(sk));
 }
 
 __bpf_kfunc static void
