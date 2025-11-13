@@ -850,7 +850,12 @@ static void bbr_update_bw(struct sock *sk, const struct rate_sample *rs)
     }
     
     if (active_flag){
+#define SAT_PIPE_ORIGINAL
+#ifdef SAT_PIPE_ORIGINAL
         if (relative_time_sec == (OFFSET - 1) && system_time_nsec >= 950000000){
+#else/* SAT_PIPE_ORIGINAL */
+        if (relative_time_sec == (OFFSET - 1) && system_time_nsec >= 900000000){
+#endif /* ! SAT_PIPE_ORIGINAL */
             active_flag = false;
             bbr->mode = BBR_PROBE_RTT;
 		    bbr_save_cwnd(sk);
