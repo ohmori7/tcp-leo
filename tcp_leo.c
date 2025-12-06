@@ -43,9 +43,9 @@ static void leo_finish(struct leo *);
 
 module_param(leo_debug, bool, 0644);
 MODULE_PARM_DESC(leo_debug, "debug flag");
-module_param(leo_handover_start_ms, int, 0644);
+module_param(leo_handover_start_ms, uint, 0644);
 MODULE_PARM_DESC(leo_handover_start_ms, "starting offset of handover (0<=offset<=1000)");
-module_param(leo_handover_end_ms, int, 0644);
+module_param(leo_handover_end_ms, uint, 0644);
 MODULE_PARM_DESC(leo_handover_end_ms, "ending offset of handover (0<=offset<=1000)");
 
 static s64
