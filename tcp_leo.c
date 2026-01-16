@@ -17,25 +17,26 @@ EXPORT_SYMBOL(leo_debug);
 #define LEO_HANDOVER_START						\
 	(LEO_HANDOVER_TIME - LEO_HANDOVER_OFFSET_START * NSEC_PER_MSEC * HZ)
 #define LEO_HANDOVER_END						\
-	(LEO_HANDOVER_TIME + LEO_HANDOVER_OFFSET_END * NSEC_PER_MSEC * HZ)
+	(LEO_HANDOVER_START + LEO_HANDOVER_DURATION * NSEC_PER_MSEC * HZ)
 #define LEO_HANDOVER_INTERVAL	(15LLU * NSEC_PER_SEC * HZ)
 
 #define LEO_SYNC_INTERVAL		(1LLU * NSEC_PER_MIN)
 
 static s64 leo_jiffies_base __read_mostly;
 #define LEO_HANDOVER_OFFSET_DEFAULT	(200ULL)
+#define LEO_HANDOVER_DURATION_DEFAULT	(LEO_HANDOVER_OFFSET_DEFAULT << 1)
 #define LEO_HANDOVER_OFFSET_MAX		(1000ULL)
 #define __LEO_HANDOVER_OFFSET(v)					\
 	((u64)(v) <= LEO_HANDOVER_OFFSET_MAX ?				\
 	 (u64)(v) : LEO_HANDOVER_OFFSET_MAX)
 #define LEO_HANDOVER_OFFSET_START					\
 	__LEO_HANDOVER_OFFSET(leo_handover_start_ms)
-#define LEO_HANDOVER_OFFSET_END						\
-	__LEO_HANDOVER_OFFSET(leo_handover_end_ms)
+#define LEO_HANDOVER_DURATION						\
+	__LEO_HANDOVER_OFFSET(leo_handover_duration_ms)
 static int leo_handover_start_ms __read_mostly =
     LEO_HANDOVER_OFFSET_DEFAULT;
-static int leo_handover_end_ms __read_mostly =
-    LEO_HANDOVER_OFFSET_DEFAULT;
+static int leo_handover_duration_ms __read_mostly =
+    LEO_HANDOVER_DURATION_DEFAULT;
 static struct hrtimer leo_jiffies_sync_timer;
 
 /* XXX */
@@ -45,8 +46,8 @@ module_param(leo_debug, bool, 0644);
 MODULE_PARM_DESC(leo_debug, "debug flag");
 module_param(leo_handover_start_ms, uint, 0644);
 MODULE_PARM_DESC(leo_handover_start_ms, "starting offset of handover (0<=offset<=1000)");
-module_param(leo_handover_end_ms, uint, 0644);
-MODULE_PARM_DESC(leo_handover_end_ms, "ending offset of handover (0<=offset<=1000)");
+module_param(leo_handover_duration_ms, uint, 0644);
+MODULE_PARM_DESC(leo_handover_duration_ms, "duration of handover (0<=duration<=1000)");
 
 static s64
 leo_jiffies_base_compute(void)
@@ -156,7 +157,7 @@ leo_handover_duration(struct sock *sk)
 {
 
 	(void)sk; /* XXX: different duration per socket in future. */
-	return leo_handover_start_ms + leo_handover_end_ms;
+	return leo_handover_start_ms + leo_handover_duration_ms;
 }
 
 __bpf_kfunc static void
