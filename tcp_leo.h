@@ -2,7 +2,7 @@
 #define DP(...)
 #else /* LEO_NODEBUG */
 extern bool leo_debug __read_mostly;
-#define DP(...)	if (leo_debug) printk(__VA_ARGS__)
+#define DP(fmt, ...)	if (leo_debug) printk("%s: " fmt, __func__, __VA_ARGS__)
 #endif /* ! LEO_NODEBUG */
 
 /*
