@@ -47,6 +47,12 @@ You can change paramters of duration to stop transmissions in ms.
 % sudo sysctl net.ipv4.tcp_allowed_congestion_control="reno cubic leo-cubic tcp_leo_bbrv1"
 ```
 
+## Debug
+
+```
+% sudo sh -c 'echo "file ${SRCDIR}/tcp_leo.c:1234 +p" > /sys/kernel/debug/dynamic_debug/control'
+```
+
 ## TODO
 - secure boot support (currently, no digital signature)
 - BBRv3 support
