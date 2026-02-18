@@ -171,6 +171,10 @@ leo_suspend_transmission(struct sock *sk)
 	leo->last_snd_cwnd = tcp_snd_cwnd(tp);
 #endif /* 0 */
 
+	/* prevent wrong computation in tcp_input.c: tcp_cwnd_reduction(). */
+	if (tp->prior_cwnd == 0)
+		tp->prior_cwnd = tp->snd_cwnd;
+
 	/* do not use tcp_snd_cwnd_set(tp, 0) warning this as a bug. */
 	tp->snd_cwnd = 0;
 
