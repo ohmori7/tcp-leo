@@ -1,0 +1,66 @@
+diff --git a/include/linux/tcp.h b/include/linux/tcp.h
+index a1c47a6d6..52977c44b 100644
+--- a/include/linux/tcp.h
++++ b/include/linux/tcp.h
+@@ -13,6 +13,8 @@
+ #ifndef _LINUX_TCP_H
+ #define _LINUX_TCP_H
+ 
++/* XXX: should make this compile option... */
++#define TCP_LEO	/* TCP for LEO satellite communications. */
+ 
+ #include <linux/skbuff.h>
+ #include <linux/win_minmax.h>
+diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
+index c010254bb..8fc1268fe 100644
+--- a/net/ipv4/tcp_input.c
++++ b/net/ipv4/tcp_input.c
+@@ -2712,8 +2712,14 @@ void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int newly_lost,
+ 	int sndcnt = 0;
+ 	int delta = tp->snd_ssthresh - tcp_packets_in_flight(tp);
+ 
++#ifdef TCP_LEO
++	/* XXX: prior_cwnd may be 0 in somewhere because we set cwnd to 0. */
++	if (newly_acked_sacked <= 0 || tp->prior_cwnd == 0)
++		return;
++#else /* TCP_LEO */
+ 	if (newly_acked_sacked <= 0 || WARN_ON_ONCE(!tp->prior_cwnd))
+ 		return;
++#endif /* ! TCP_LEO */
+ 
+ 	tp->prr_delivered += newly_acked_sacked;
+ 	if (delta < 0) {
+@@ -5730,6 +5736,9 @@ void tcp_check_space(struct sock *sk)
+ 			tcp_chrono_stop(sk, TCP_CHRONO_SNDBUF_LIMITED);
+ 	}
+ }
++#ifdef TCP_LEO
++EXPORT_SYMBOL(tcp_check_space);
++#endif /* TCP_LEO */
+ 
+ static inline void tcp_data_snd_check(struct sock *sk)
+ {
+diff --git a/net/ipv4/tcp_output.c b/net/ipv4/tcp_output.c
+index 5029d0ce6..ae75a63a8 100644
+--- a/net/ipv4/tcp_output.c
++++ b/net/ipv4/tcp_output.c
+@@ -1886,6 +1886,9 @@ unsigned int tcp_current_mss(struct sock *sk)
+ 
+ 	return mss_now;
+ }
++#ifdef TCP_LEO
++EXPORT_SYMBOL(tcp_current_mss);
++#endif /* TCP_LEO */
+ 
+ /* RFC2861, slow part. Adjust cwnd, after it was not full during one rto.
+  * As additional protections, we do not touch cwnd in retransmission phases,
+@@ -2983,6 +2986,9 @@ void __tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
+ 			   sk_gfp_mask(sk, GFP_ATOMIC)))
+ 		tcp_check_probe_timer(sk);
+ }
++#ifdef TCP_LEO
++EXPORT_SYMBOL(__tcp_push_pending_frames);
++#endif /* TCP_LEO */
+ 
+ /* Send _single_ skb sitting at the send head. This function requires
+  * true push pending frames to setup probe timer etc.
