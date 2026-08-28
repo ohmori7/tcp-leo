@@ -5,3 +5,4 @@ modules.order
 *.mod
 *.mod.*
 *.cmd
+*.swp
