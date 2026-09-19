@@ -413,8 +413,8 @@ static void pcc_decide_slow_start(struct pcc_data *pcc, struct tcp_sock *tsk)
  * was started, was ended,
  * find interval per sample
  * ************************/
-bool send_interval_ended(struct pcc_interval *interval, struct tcp_sock *tsk,
-			 struct pcc_data *pcc)
+static bool send_interval_ended(struct pcc_interval *interval, struct tcp_sock *tsk,
+				struct pcc_data *pcc)
 {
 	int segs_sent = tsk->data_segs_out - interval->segs_sent_start;
 
@@ -431,8 +431,8 @@ bool send_interval_ended(struct pcc_interval *interval, struct tcp_sock *tsk,
 	return false;
 }
 
-bool recive_interval_ended(struct pcc_interval *interval,
-			   struct tcp_sock *tsk, struct pcc_data *pcc)
+static bool recive_interval_ended(struct pcc_interval *interval,
+				  struct tcp_sock *tsk, struct pcc_data *pcc)
 {
 	return interval->segs_sent_end &&
 	       interval->segs_sent_end - pcc_ignore_packets <
