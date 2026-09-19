@@ -3,6 +3,9 @@ obj-m := tcp_leo.o tcp_leo_cubic.o tcp_leo_bbrv1.o tcp_bbrv1.o
 #obj-m += tcp_bbrv3.o
 obj-m +=  tcp_sat_pipe_bbrv1.o
 
+# do not allow any warnings.
+ccflags-y += -Werror
+
 CFLAGS_tcp_leo_cubic.o := -DTCP_LEO_CUBIC
 CFLAGS_tcp_leo_bbrv1.o := -DTCP_LEO_BBR
 #CFLAGS_tcp_bbrv3.o := -I/usr/src/linux-source-6.8.0/linux-source-6.8.0-87.88/net/ipv4/
