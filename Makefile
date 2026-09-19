@@ -2,6 +2,8 @@
 obj-m := tcp_leo.o tcp_leo_cubic.o tcp_leo_bbrv1.o tcp_bbrv1.o
 #obj-m += tcp_bbrv3.o
 obj-m +=  tcp_sat_pipe_bbrv1.o
+#
+obj-m += tcp_pcc_vivace.o
 
 # do not allow any warnings.
 ccflags-y += -Werror
