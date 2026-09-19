@@ -19,5 +19,5 @@ struct leo {
 	u32 *last_snd_cwnd;
 };
 
-bool leo_handover_check(struct sock *, u32);
+bool leo_handover_check(struct sock *, u32 *);
 void leo_init(struct sock *, u32 *);

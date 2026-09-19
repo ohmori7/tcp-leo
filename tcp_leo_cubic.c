@@ -348,7 +348,7 @@ __bpf_kfunc static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 		return;
 
 #ifdef TCP_LEO_CUBIC
-	if (leo_handover_check(sk, ca->last_cwnd))
+	if (leo_handover_check(sk, &ca->last_cwnd))
 		return;
 #endif /* TCP_LEO_CUBIC */
 
