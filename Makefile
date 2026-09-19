@@ -5,6 +5,7 @@ obj-m +=  tcp_sat_pipe_bbrv1.o
 #
 obj-m += tcp_illinois.o
 #
+obj-m += tcp_pcc_alegro.o
 obj-m += tcp_pcc_vivace.o
 
 # do not allow any warnings.
