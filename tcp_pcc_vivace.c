@@ -156,7 +156,7 @@ static void pcc_set_cwnd(struct sock *sk)
 
 
 /* was the pcc struct fully inited */
-bool pcc_valid(struct pcc_data *pcc)
+static bool pcc_valid(struct pcc_data *pcc)
 {
 	return (pcc && pcc->intervals && pcc->intervals[0].rate);
 }
@@ -230,6 +230,7 @@ static void start_interval(struct sock *sk, struct pcc_data *pcc)
 	pcc_set_cwnd(sk);
 }
 
+#ifdef notused
 /************************
  * Utility and decisions *
  * **********************/
@@ -250,6 +251,7 @@ static u32 pcc_exp(s32 x)
 	}
 	return e;
 }
+#endif /* notused */
 
 /* Calculate the graident of utility w.r.t. sending rate, but only if the rates
  * are far enough apart for the measurment to have low noise.
@@ -308,8 +310,9 @@ static void pcc_calc_utility_vivace(struct pcc_data *pcc, struct pcc_interval *i
 	/* loss rate = lost packets / all packets counted*/
 	loss_ratio = (lost * PCC_SCALE) / (lost + delivered);
 
-    if (pcc->start_mode && loss_ratio < 100)
+    if (pcc->start_mode && loss_ratio < 100) {
         loss_ratio = 0;
+    }
 
 	util = /* int_sqrt((u64)rate)*/ rate - (rate * (900 * lat_infl + 11 * loss_ratio)) / PCC_SCALE;
 
@@ -321,6 +324,7 @@ static void pcc_calc_utility_vivace(struct pcc_data *pcc, struct pcc_interval *i
 
 }
 
+#ifdef notused
 static void pcc_calc_utility_allegro(struct pcc_data *pcc, struct pcc_interval *interval, struct sock *sk)
 {
 	s64 loss_ratio, delivered, lost, mss, rate, throughput, util;
@@ -360,6 +364,7 @@ static void pcc_calc_utility_allegro(struct pcc_data *pcc, struct pcc_interval *
 		 delivered, lost, util);
 	interval->utility = util;
 }
+#endif /* notused */
 
 static enum PCC_DECISION
 pcc_get_decision(struct pcc_data *pcc, u32 new_rate)
@@ -416,7 +421,7 @@ static void pcc_decide(struct pcc_data *pcc, struct sock *sk)
 		pcc->moving = true;
 	    pcc_setup_intervals_moving(pcc);
 	} else {
-		printk(KERN_INFO "%d decide: stay %d (%d)\n", pcc->id,
+		printk(KERN_INFO "%d decide: stay %lld (%d)\n", pcc->id,
 			pcc->rate, pcc->decisions_count);
 	    pcc_setup_intervals_probing(pcc);
 	}
@@ -457,7 +462,7 @@ static s64 pcc_apply_change_bound(struct pcc_data *pcc, s64 step) {
 
 	if (change_ratio > pcc->change_bound) {
 		step = (pcc->rate * pcc->change_bound) / PCC_SCALE;
-		printk("bound %u rate %u step %lld\n", pcc->change_bound, pcc->rate, step);
+		printk("bound %u rate %llu step %lld\n", pcc->change_bound, pcc->rate, step);
 		pcc->change_bound += PCC_CHANGE_BOUND_STEP;
 	} else {
 		pcc->change_bound = PCC_MIN_CHANGE_BOUND;
@@ -476,7 +481,7 @@ static u32 pcc_decide_rate_moving(struct sock *sk, struct pcc_data *pcc)
 	(*pcc->util_func)(pcc, interval, sk);
 	utility = interval->utility;
 	
-	printk(KERN_INFO "%d mv: pr %u pu %lld nr %u nu %lld\n",
+	printk(KERN_INFO "%d mv: pr %lld pu %lld nr %lld nu %lld\n",
 		   pcc->id, pcc->last_rate, prev_utility, pcc->rate, utility);
 
 	grad = pcc_calc_util_grad(pcc->rate, utility, pcc->last_rate, prev_utility);
@@ -514,7 +519,7 @@ static void pcc_decide_moving(struct sock *sk, struct pcc_data *pcc)
         tcp_sk(sk)->mss_cache) / pcc_get_rtt(tcp_sk(sk));
     new_rate = max(new_rate, packet_min_rate);
 	pcc->last_rate = pcc->rate;
-	printk(KERN_INFO "%d moving: new rate %lld (%d) old rate %d\n",
+	printk(KERN_INFO "%d moving: new rate %lld (%d) old rate %lld\n",
 		   pcc->id, new_rate,
 		   pcc->decisions_count, pcc->last_rate);
 	pcc->rate = new_rate;
@@ -544,7 +549,7 @@ static void pcc_decide_slow_start(struct sock *sk, struct pcc_data *pcc)
 {
 	struct pcc_interval *interval = &pcc->intervals[0];
 	s64 utility, prev_utility, adjust_utility, prev_adjust_utility, tmp_rate;
-	u32 extra_rate;
+	s64 extra_rate;
 
 	prev_utility = interval->utility;
 	(*pcc->util_func)(pcc, interval, sk);
@@ -605,8 +610,8 @@ static void pcc_decide_slow_start(struct sock *sk, struct pcc_data *pcc)
 /* Have we sent all the data we need to for this interval? Must have at least
  * the minimum number of packets and should have sent 1 RTT worth of data.
  */
-bool send_interval_ended(struct pcc_interval *interval, struct tcp_sock *tsk,
-			 struct pcc_data *pcc)
+static bool send_interval_ended(struct pcc_interval *interval, struct tcp_sock *tsk,
+				struct pcc_data *pcc)
 {
 	int packets_sent = tsk->data_segs_out - interval->packets_sent_base;
 
@@ -623,8 +628,8 @@ bool send_interval_ended(struct pcc_interval *interval, struct tcp_sock *tsk,
 /* Have we accounted for (acked or lost) enough of the packets that we sent to
  * calculate summary statistics?
  */
-bool recive_interval_ended(struct pcc_interval *interval,
-			   struct tcp_sock *tsk, struct pcc_data *pcc)
+static bool recive_interval_ended(struct pcc_interval *interval,
+				  struct tcp_sock *tsk, struct pcc_data *pcc)
 {
 
 	return interval->packets_ended && interval->packets_ended - 10 < pcc->packets_counted;
