@@ -7,8 +7,8 @@ extern bool leo_debug __read_mostly;
 
 struct leo;
 
-bool leo_handover_check(struct leo *, u32 *);
-bool leo_handover_check_by_index(struct sock *, u32, u32 *);
+bool leo_handover_check(struct leo *);
+bool leo_handover_check_by_index(struct sock *, u32);
 u32 leo_index_get(struct leo *);
 struct leo *leo_init(struct sock *sk, u32 *);
 void leo_finish(struct leo *);

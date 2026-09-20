@@ -22,7 +22,7 @@ struct leo {
 	struct timer_list handover_timer;
 #endif /* ! TCP_LEO_HRTIMER */
 	struct sock *sock;
-	u32 *last_snd_cwnd;
+	u32 last_snd_cwnd;
 };
 
 bool leo_debug __read_mostly = false;
@@ -184,18 +184,13 @@ leo_handover_duration(struct sock *sk)
 }
 
 __bpf_kfunc static void
-leo_suspend_transmission(struct sock *sk, u32 *last_snd_cwnd)
+leo_suspend_transmission(struct leo *leo)
 {
+	struct sock *sk = leo->sock;
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct inet_connection_sock *icsk = inet_csk(sk);
 
-	/* XXX: this may break congestion control scheme, but
-	 *	cannot help but because no space to hold
-	 *	last_snd_cwnd in TCP protocol control block... */
-	*last_snd_cwnd = tcp_snd_cwnd(tp);
-#if 0	/* XXX: this is the best way but... */
 	leo->last_snd_cwnd = tcp_snd_cwnd(tp);
-#endif /* 0 */
 
 	/* prevent wrong computation in tcp_input.c: tcp_cwnd_reduction(). */
 	if (tp->prior_cwnd == 0)
@@ -211,11 +206,13 @@ leo_suspend_transmission(struct sock *sk, u32 *last_snd_cwnd)
 }
 
 __bpf_kfunc static void
-leo_resume_transmission(struct sock *sk, u32 last_snd_cwnd)
+leo_resume_transmission(struct leo *leo)
 {
+	struct sock *sk = leo->sock;
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	tcp_snd_cwnd_set(tp, max(1, last_snd_cwnd));
+	WARN_ON(leo->last_snd_cwnd == 0);
+	tcp_snd_cwnd_set(tp, max(1, leo->last_snd_cwnd));
 
 	/* wake up the socket if necessary. */
 	/* open code of tcp_data_snd_check() in tcp_input.c. */
@@ -233,8 +230,8 @@ leo_resume_transmission(struct sock *sk, u32 last_snd_cwnd)
 	 */
 	if (sk->sk_socket &&
 	    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
-		DP("LEO[%p]: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u",
-		    sk, READ_ONCE(sk->sk_sndbuf), READ_ONCE(sk->sk_wmem_queued));
+		DP("LEO[%u:%p]: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u",
+		    leo->index, sk, READ_ONCE(sk->sk_sndbuf), READ_ONCE(sk->sk_wmem_queued));
 		/*
 		 * we cannot use INDIRECT_CALL_1() here.
 		 * INDIRECT_CALL_1(sk->sk_write_space, sk_stream_write_space, sk);
@@ -272,9 +269,9 @@ leo_handover_timer_reset(struct leo *leo)
 		timo = LEO_HANDOVER_START + LEO_HANDOVER_INTERVAL
 		    - njiffies;
 #endif /* ! LEO_HANDOVER_TIMER_ONLY */
-	DP("LEO[%p]: handover: timer reset: timo (ms): %lld, start: %llu, time: %llu, "
+	DP("LEO[%u:%p]: handover: timer reset: timo (ms): %lld, start: %llu, time: %llu, "
 	    "end: %llu, int.: %llu, nsec (ms): %llu",
-	    sk, timo / NSEC_PER_MSEC / HZ, LEO_HANDOVER_START / HZ,
+	    leo->index, sk, timo / NSEC_PER_MSEC / HZ, LEO_HANDOVER_START / HZ,
 	    LEO_HANDOVER_TIME / HZ, LEO_HANDOVER_END / HZ,
 	    LEO_HANDOVER_INTERVAL / HZ, njiffies / HZ);
 #ifdef TCP_LEO_HRTIMER
@@ -295,39 +292,43 @@ leo_handover_timer_reset(struct leo *leo)
 }
 
 static void
-leo_handover_start(struct sock *sk, u32 *last_snd_cwndp)
+leo_handover_start(struct leo *leo)
 {
+	struct sock *sk = leo->sock;
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (tcp_snd_cwnd(tp) == 0) {
-		DP("LEO[%p]: handover: start: already started???", sk);
+		DP("LEO[%u:%p]: handover: start: already started???",
+		    leo->index, sk);
 		return;
 	}
 
-	DP("LEO[%p]: handover: start: cwnd: %d, inflight: %d",
-	    sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
+	DP("LEO[%u:%p]: handover: start: cwnd: %d, inflight: %d",
+	    leo->index, sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
 
-	leo_suspend_transmission(sk, last_snd_cwndp);
+	leo_suspend_transmission(leo);
 }
 
 static void
-leo_handover_end(struct sock *sk, u32 last_snd_cwnd)
+leo_handover_end(struct leo *leo)
 {
+	struct sock *sk = leo->sock;
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (tcp_snd_cwnd(tp) != 0) {
-		DP("LEO[%p]: handover: end: already cwnd recovered???", sk);
+		DP("LEO[%u:%p]: handover: end: already cwnd recovered???",
+		    leo->index, sk);
 		return;
 	}
 
-	leo_resume_transmission(sk, last_snd_cwnd);
+	leo_resume_transmission(leo);
 
-	DP("LEO[%p]: handover: end: recover: cwnd: %d, inflight: %d",
-	    sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
+	DP("LEO[%u:%p]: handover: end: recover: cwnd: %d, inflight: %d",
+	    leo->index, sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
 }
 
 bool
-leo_handover_check(struct leo *leo, u32 *last_snd_cwnd)
+leo_handover_check(struct leo *leo)
 {
 	struct sock *sk;
 	struct tcp_sock *tp;
@@ -343,14 +344,16 @@ leo_handover_check(struct leo *leo, u32 *last_snd_cwnd)
 #else /* LEO_HANDOVER_TIMER_ONLY */
 	if (is_leo_handover()) {
 		if (tcp_snd_cwnd(tp) != 0) {
-			DP("LEO[%p]: handover: missing transmission suspension???", sk);
-			leo_handover_start(sk, last_snd_cwnd);
+			DP("LEO[%u:%p]: handover: missing transmission suspension???",
+			    leo->index, sk);
+			leo_handover_start(leo);
 		}
 		return true;
 	}
 	if (tcp_snd_cwnd(tp) == 0) {
-		DP("LEO[%p]: handover: unrecovered??? forcely recover cwnd.", sk);
-		leo_handover_end(sk, *last_snd_cwnd);
+		DP("LEO[%u:%p]: handover: unrecovered??? forcely recover cwnd.",
+		    leo->index, sk);
+		leo_handover_end(leo);
 	}
 #endif /* ! LEO_HANDOVER_TIMER_ONLY */
 	return false;
@@ -358,7 +361,7 @@ leo_handover_check(struct leo *leo, u32 *last_snd_cwnd)
 EXPORT_SYMBOL(leo_handover_check);
 
 bool
-leo_handover_check_by_index(struct sock *sk, u32 idx, u32 *last_snd_cwnd)
+leo_handover_check_by_index(struct sock *sk, u32 idx)
 {
 	struct leo *leo;
 
@@ -368,7 +371,7 @@ leo_handover_check_by_index(struct sock *sk, u32 idx, u32 *last_snd_cwnd)
 	leo = leos[idx];
 	if (leo == NULL || leo->sock != sk)
 		return false;
-	return leo_handover_check(leo, last_snd_cwnd);
+	return leo_handover_check(leo);
 }
 EXPORT_SYMBOL(leo_handover_check_by_index);
 
@@ -380,22 +383,23 @@ leo_handover(struct leo *leo)
 #ifdef LEO_HANDOVER_TIMER_ONLY
 
 	if (tp->snd_cwnd != 0)
-		leo_handover_start(sk, leo->last_snd_cwnd);
+		leo_handover_start(leo);
 	else
-		leo_handover_end(sk, *leo->last_snd_cwnd);
+		leo_handover_end(leo);
 #else /* LEO_HANDOVER_TIMER_ONLY  */
 	u64 njiffies;
 
 	njiffies = leo_jiffies() % LEO_HANDOVER_INTERVAL;
 	if (njiffies + LEO_HANDOVER_TIME_JITTER >= LEO_HANDOVER_END)
-		leo_handover_end(sk, *leo->last_snd_cwnd);
+		leo_handover_end(leo);
 	else if (njiffies + LEO_HANDOVER_TIME_JITTER >= LEO_HANDOVER_START)
-		leo_handover_start(sk, leo->last_snd_cwnd);
+		leo_handover_start(leo);
 	else if (tp->snd_cwnd == 0)
-		leo_handover_end(sk, *leo->last_snd_cwnd);
+		leo_handover_end(leo);
 	else
 		/* already handover ended, and resumed. */
-		DP("LEO[%p]: handover: already handover recovered???", sk);
+		DP("LEO[%u:%p]: handover: already handover recovered???",
+		    leo->index, sk);
 #endif /* ! LEO_HANDOVER_TIMER_ONLY  */
 	leo_handover_timer_reset(leo);
 }
@@ -425,7 +429,7 @@ leo_handover_timeout(struct timer_list *t)
 #else /* TCP_LEO_HRTIMER */
 		sk_reset_timer(sk, &leo->handover_timer, jiffies + 1);
 #endif /* ! TCP_LEO_HRTIMER */
-		DP("LEO[%p]: socket is owned by user", sk);
+		DP("LEO[%u:%p]: socket is owned by user", leo->index, sk);
 	} else if (sk->sk_state == TCP_ESTABLISHED)
 		leo_handover(leo);
 	bh_unlock_sock(sk);
@@ -513,18 +517,18 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 
 	leo = kmalloc(sizeof(*leo), GFP_ATOMIC);
 	if (leo == NULL) {
-		DP("LEO[%p]: allocation failure", sk);
+		DP("LEO[?:%p]: allocation failure", sk);
 		return NULL;
 	}
 	if (! leo_index_alloc(leo)) {
-		DP("LEO[%p]: index overflow", sk);
+		DP("LEO[?:%p]: index overflow", sk);
 		kfree(leo);
 		return NULL;
 	}
 	DP("LEO[%u:%p]: allocate: %p", leo->index, sk, leo);
 
 	leo->sock = sk;
-	leo->last_snd_cwnd = last_snd_cwnd;
+	leo->last_snd_cwnd = 0;
 
 #ifdef TCP_LEO_HRTIMER
 	hrtimer_init(&leo->handover_timer, CLOCK_REALTIME,
@@ -534,7 +538,7 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 	timer_setup(&leo->handover_timer, leo_handover_timeout, 0);
 #endif /* TCP_LEO_HRTIMER */
 	if (is_leo_handover())
-		leo_suspend_transmission(sk, last_snd_cwnd);
+		leo_suspend_transmission(leo);
 	leo_handover_timer_reset(leo);
 	return leo;
 }

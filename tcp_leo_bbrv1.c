@@ -1038,7 +1038,7 @@ __bpf_kfunc static void bbr_main(struct sock *sk, const struct rate_sample *rs)
 	u32 bw;
 
 #ifdef TCP_LEO_BBR
-	if (leo_handover_check_by_index(sk, bbr->leo_index, &bbr->prior_cwnd))
+	if (leo_handover_check_by_index(sk, bbr->leo_index))
 		return;
 #endif /* TCP_LEO_BBR */
 
