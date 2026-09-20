@@ -20,7 +20,7 @@ struct leo {
 #else /* TCP_LEO_HRTIMER */
 	struct timer_list handover_timer;
 #endif /* ! TCP_LEO_HRTIMER */
-	void *sock;
+	struct sock *sock;
 	u32 *last_snd_cwnd;
 };
 
