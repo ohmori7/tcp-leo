@@ -426,9 +426,7 @@ leo_handover_timeout(struct timer_list *t)
 		sk_reset_timer(sk, &leo->handover_timer, jiffies + 1);
 #endif /* ! TCP_LEO_HRTIMER */
 		DP("LEO[%p]: socket is owned by user", sk);
-	} else if (sk->sk_state != TCP_ESTABLISHED)
-		;
-	else
+	} else if (sk->sk_state == TCP_ESTABLISHED)
 		leo_handover(leo);
 	bh_unlock_sock(sk);
 
