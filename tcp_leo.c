@@ -14,7 +14,12 @@
  * and there is no space available.
  */
 struct leo {
+#define TCP_LEO_HRTIMER
+#ifdef TCP_LEO_HRTIMER
+	struct hrtimer handover_timer;
+#else /* TCP_LEO_HRTIMER */
 	struct timer_list handover_timer;
+#endif /* ! TCP_LEO_HRTIMER */
 	void *sock;
 	u32 *last_snd_cwnd;
 };
@@ -268,10 +273,21 @@ leo_handover_timer_reset(struct leo *leo)
 	    sk, timo / NSEC_PER_MSEC / HZ, LEO_HANDOVER_START / HZ,
 	    LEO_HANDOVER_TIME / HZ, LEO_HANDOVER_END / HZ,
 	    LEO_HANDOVER_INTERVAL / HZ, njiffies / HZ);
+#ifdef TCP_LEO_HRTIMER
+	timo /= HZ;
+	if (timo <= 0)
+		timo = 1;
+	sock_hold(sk);
+	hrtimer_start(&leo->handover_timer,
+	    ktime_set(timo / NSEC_PER_SEC, timo % NSEC_PER_SEC),
+	    HRTIMER_MODE_REL_PINNED_SOFT);
+#else /* TCP_LEO_HRTIMER */
 	timo /= NSEC_PER_SEC;
 	if (timo <= 0)
 		timo = 1;
+	/* refernce counter will be incremented in sk_reset_timer(). */
 	sk_reset_timer(sk, &leo->handover_timer, jiffies + timo);
+#endif /* ! TCP_LEO_HRTIMER */
 }
 
 static void
@@ -359,15 +375,31 @@ leo_handover(struct leo *leo)
 	leo_handover_timer_reset(leo);
 }
 
+#ifdef TCP_LEO_HRTIMER
+__bpf_kfunc static enum hrtimer_restart
+leo_handover_timeout(struct hrtimer *t)
+#else /* TCP_LEO_HRTIMER */
 __bpf_kfunc static void
 leo_handover_timeout(struct timer_list *t)
+#endif /* ! TCP_LEO_HRTIMER */
 {
+#ifdef TCP_LEO_HRTIMER
+	struct leo *leo = container_of(t, struct leo, handover_timer);
+#else /* TCP_LEO_HRTIMER */
 	struct leo *leo = from_timer(leo, t, handover_timer);
+#endif /* ! TCP_LEO_HRTIMER */
 	struct sock *sk = LEO_SOCKET(leo);
 
 	bh_lock_sock(sk);
 	if (sock_owned_by_user(sk)) {
+#ifdef TCP_LEO_HRTIMER
+		hrtimer_start(&leo->handover_timer,
+		    ktime_set(0, NSEC_PER_MSEC),
+		    HRTIMER_MODE_REL_PINNED_SOFT);
+		sock_hold(sk);
+#else /* TCP_LEO_HRTIMER */
 		sk_reset_timer(sk, &leo->handover_timer, jiffies + 1);
+#endif /* ! TCP_LEO_HRTIMER */
 		DP("LEO[%p]: socket is owned by user\n", sk);
 	} else if (sk->sk_state != TCP_ESTABLISHED)
 		leo_finish(leo);
@@ -375,8 +407,14 @@ leo_handover_timeout(struct timer_list *t)
 		leo_handover(leo);
 	bh_unlock_sock(sk);
 
+#if ! defined(TCP_LEO_HRTIMER)
 	/* decrement refernce counter incremented in sk_reset_timer(). */
+#endif /* ! TCP_LEO_HRTIMER */
 	sock_put(sk);
+
+#ifdef TCP_LEO_HRTIMER
+	return HRTIMER_NORESTART;
+#endif /* TCP_LEO_HRTIMER */
 }
 
 __bpf_kfunc void
@@ -394,7 +432,13 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 	leo->sock = sk;
 	leo->last_snd_cwnd = last_snd_cwnd;
 
+#ifdef TCP_LEO_HRTIMER
+	hrtimer_init(&leo->handover_timer, CLOCK_REALTIME,
+	    HRTIMER_MODE_REL_PINNED_SOFT);
+	leo->handover_timer.function = leo_handover_timeout;
+#else /* TCP_LEO_HRTIMER */
 	timer_setup(&leo->handover_timer, leo_handover_timeout, 0);
+#endif /* TCP_LEO_HRTIMER */
 	if (is_leo_handover())
 		leo_suspend_transmission(sk, last_snd_cwnd);
 	leo_handover_timer_reset(leo);
