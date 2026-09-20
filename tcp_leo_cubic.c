@@ -146,7 +146,7 @@ __bpf_kfunc static void cubictcp_init(struct sock *sk)
 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
 
 #ifdef TCP_LEO_CUBIC
-	ca->leo = leo_init(sk, &ca->last_cwnd);
+	ca->leo = leo_init(sk);
 #endif /* TCP_LEO_CUBIC */
 }
 

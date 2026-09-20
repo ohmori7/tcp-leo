@@ -10,6 +10,6 @@ struct leo;
 bool leo_handover_check(struct leo *);
 bool leo_handover_check_by_index(struct sock *, u32);
 u32 leo_index_get(struct leo *);
-struct leo *leo_init(struct sock *, u32 *);
+struct leo *leo_init(struct sock *);
 void leo_finish(struct leo *);
 __bpf_kfunc void leo_finish_by_index(struct sock *, u32);

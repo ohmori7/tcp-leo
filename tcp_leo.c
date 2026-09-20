@@ -511,7 +511,7 @@ leo_lookup(struct sock *sk, u32 idx)
 }
 
 __bpf_kfunc struct leo *
-leo_init(struct sock *sk, u32 *last_snd_cwnd)
+leo_init(struct sock *sk)
 {
 	struct leo *leo;
 
