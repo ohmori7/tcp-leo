@@ -14,6 +14,7 @@
  * and there is no space available.
  */
 struct leo {
+	u32 index;
 #define TCP_LEO_HRTIMER
 #ifdef TCP_LEO_HRTIMER
 	struct hrtimer handover_timer;
@@ -58,15 +59,18 @@ static int leo_handover_duration_ms __read_mostly =
     LEO_HANDOVER_DURATION_DEFAULT;
 static struct hrtimer leo_jiffies_sync_timer;
 
-/* XXX */
-static void leo_finish(struct leo *);
-
 module_param(leo_debug, bool, 0644);
 MODULE_PARM_DESC(leo_debug, "debug flag");
 module_param(leo_handover_start_ms, uint, 0644);
 MODULE_PARM_DESC(leo_handover_start_ms, "starting offset of handover (0<=offset<=1000)");
 module_param(leo_handover_duration_ms, uint, 0644);
 MODULE_PARM_DESC(leo_handover_duration_ms, "duration of handover (0<=duration<=1000)");
+
+#define LEO_SIZE_DEFAULT 128
+static u32 leo_index = 0;
+static u32 leo_size = 0;
+static struct leo **leos = NULL;
+static DEFINE_MUTEX(leo_lock);
 
 static s64
 leo_jiffies_base_compute(void)
@@ -323,10 +327,16 @@ leo_handover_end(struct sock *sk, u32 last_snd_cwnd)
 }
 
 bool
-leo_handover_check(struct sock *sk, u32 *last_snd_cwnd)
+leo_handover_check(struct leo *leo, u32 *last_snd_cwnd)
 {
-	struct tcp_sock *tp = tcp_sk(sk);
+	struct sock *sk;
+	struct tcp_sock *tp;
 
+	WARN_ON(leo == NULL);
+	if (leo == NULL) /* just in case. */
+		return false;
+	sk = leo->sock;
+	tp = tcp_sk(sk);
 #ifdef LEO_HANDOVER_TIMER_ONLY
 	if (tcp_snd_cwnd(tp) == 0)
 		return true;
@@ -346,6 +356,21 @@ leo_handover_check(struct sock *sk, u32 *last_snd_cwnd)
 	return false;
 }
 EXPORT_SYMBOL(leo_handover_check);
+
+bool
+leo_handover_check_by_index(struct sock *sk, u32 idx, u32 *last_snd_cwnd)
+{
+	struct leo *leo;
+
+	WARN_ON(idx >= leo_size);
+	if (idx >= leo_size)
+		return false;
+	leo = leos[idx];
+	if (leo == NULL || leo->sock != sk)
+		return false;
+	return leo_handover_check(leo, last_snd_cwnd);
+}
+EXPORT_SYMBOL(leo_handover_check_by_index);
 
 static void
 leo_handover(struct leo *leo)
@@ -402,7 +427,7 @@ leo_handover_timeout(struct timer_list *t)
 #endif /* ! TCP_LEO_HRTIMER */
 		DP("LEO[%p]: socket is owned by user", sk);
 	} else if (sk->sk_state != TCP_ESTABLISHED)
-		leo_finish(leo);
+		;
 	else
 		leo_handover(leo);
 	bh_unlock_sock(sk);
@@ -417,7 +442,73 @@ leo_handover_timeout(struct timer_list *t)
 #endif /* TCP_LEO_HRTIMER */
 }
 
-__bpf_kfunc void
+#define LEO_INDEX_NONE	((u32)(s32)-1)
+static u32
+leo_index_next(void)
+{
+	u32 i;
+
+	for (i = leo_index; i < leo_size; i++)
+		if (leos[i] == NULL)
+			return i;
+	for (i = 0; i < leo_index; i++)
+		if (leos[i] == NULL)
+			return i;
+	return LEO_INDEX_NONE;
+}
+
+static bool
+leo_index_alloc(struct leo *leo)
+{
+
+	mutex_lock(&leo_lock);
+	leo->index = leo_index_next();
+	if (leo->index != LEO_INDEX_NONE) {
+		leos[leo->index] = leo;
+		leo_index = leo->index;
+	}
+	mutex_unlock(&leo_lock);
+	return (leo->index != LEO_INDEX_NONE);
+}
+
+u32
+leo_index_get(struct leo *leo)
+{
+
+	return leo->index;
+}
+EXPORT_SYMBOL(leo_index_get);
+
+static void
+leo_index_free(struct leo *leo)
+{
+
+	mutex_lock(&leo_lock);
+	WARN_ON(leo->index >= leo_size);
+	WARN_ON(leos[leo->index] != leo);
+	if (leo->index < leo_size &&
+	    leos[leo->index] == leo)
+		leos[leo->index] = NULL;
+	mutex_unlock(&leo_lock);
+	leo->index = LEO_INDEX_NONE;
+}
+
+static struct leo *
+leo_lookup(struct sock *sk, u32 idx)
+{
+	struct leo *leo;
+
+	WARN_ON(idx >= leo_size);
+	if (idx >= leo_size)
+		return NULL;
+	leo = leos[idx];
+	WARN_ON(leo == NULL || leo->sock != sk);
+	if (leo == NULL || leo->sock != sk)
+		return NULL;
+	return leo;
+}
+
+__bpf_kfunc struct leo *
 leo_init(struct sock *sk, u32 *last_snd_cwnd)
 {
 	struct leo *leo;
@@ -425,9 +516,14 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 	leo = kmalloc(sizeof(*leo), GFP_ATOMIC);
 	if (leo == NULL) {
 		DP("LEO[%p]: allocation failure", sk);
-		return;
+		return NULL;
 	}
-	DP("LEO[%p]: allocate: %p", sk, leo);
+	if (! leo_index_alloc(leo)) {
+		DP("LEO[%p]: index overflow", sk);
+		kfree(leo);
+		return NULL;
+	}
+	DP("LEO[%u:%p]: allocate: %p", leo->index, sk, leo);
 
 	leo->sock = sk;
 	leo->last_snd_cwnd = last_snd_cwnd;
@@ -442,16 +538,36 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 	if (is_leo_handover())
 		leo_suspend_transmission(sk, last_snd_cwnd);
 	leo_handover_timer_reset(leo);
+	return leo;
 }
 EXPORT_SYMBOL(leo_init);
 
-__bpf_kfunc static void
+__bpf_kfunc void
 leo_finish(struct leo *leo)
 {
 
-	DP("LEO[%p]: free: %p", LEO_SOCKET(leo), leo);
+	WARN_ON(leo == NULL || leo->index >= leo_size);
+	if (leo == NULL || leo->index >= leo_size)
+		return;
+
+#ifdef TCP_LEO_HRTIMER
+	if (hrtimer_try_to_cancel(&leo->handover_timer) == 1)
+                sock_put(leo->sock);
+#endif /* TCP_LEO_HRTIMER */
+
+	DP("LEO[%u:%p]: free: %p", leo->index, LEO_SOCKET(leo), leo);
+	leo_index_free(leo);
 	kfree(leo);
 }
+EXPORT_SYMBOL(leo_finish);
+
+__bpf_kfunc void
+leo_finish_by_index(struct sock *sk, u32 idx)
+{
+
+	leo_finish(leo_lookup(sk, idx));
+}
+EXPORT_SYMBOL(leo_finish_by_index);
 
 BTF_SET8_START(leo_check_kfunc_ids)
 #ifdef CONFIG_X86
@@ -461,6 +577,7 @@ BTF_ID_FLAGS(func, leo_resume_transmission)
 BTF_ID_FLAGS(func, leo_handover_timeout)
 BTF_ID_FLAGS(func, leo_init)
 BTF_ID_FLAGS(func, leo_finish)
+BTF_ID_FLAGS(func, leo_finish_by_index)
 #endif
 #endif
 BTF_SET8_END(leo_check_kfunc_ids)
@@ -475,10 +592,18 @@ leo_register(void)
 {
 	int ret;
 
-	ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &leo_kfunc_set);
-	if (ret < 0)
-		return ret;
+	leos = kmalloc(sizeof(struct leo *) * LEO_SIZE_DEFAULT, GFP_ATOMIC);
+	if (leos == NULL)
+		return -1;
+	memset(leos, 0, sizeof(struct leo *) * LEO_SIZE_DEFAULT);
 
+	ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &leo_kfunc_set);
+	if (ret < 0) {
+		kfree(leos);
+		return ret;
+	}
+
+	leo_size = LEO_SIZE_DEFAULT;
 	leo_time_init();
 	DP("LEO: time: %lld.%09lld",
 	    leo_time() / NSEC_PER_SEC, leo_time() % NSEC_PER_SEC);
@@ -490,6 +615,9 @@ static void __exit
 leo_unregister(void)
 {
 
+	kfree(leos);
+	leo_size = 0;
+	leo_index = 0;
 	leo_time_finish();
 }
 

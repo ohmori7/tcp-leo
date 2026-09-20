@@ -104,7 +104,11 @@ struct bbr {
 		round_start:1,	     /* start of packet-timed tx->ack round? */
 		idle_restart:1,	     /* restarting after idle? */
 		probe_rtt_round_done:1,  /* a BBR_PROBE_RTT round at 4 pkts? */
+#ifdef TCP_LEO_BBR
+		leo_index:13,
+#else /* TCP_LEO_BBR */
 		unused:13,
+#endif /* ! TCP_LEO_BBR */
 		lt_is_sampling:1,    /* taking long-term ("LT") samples now? */
 		lt_rtt_cnt:7,	     /* round trips in long-term interval */
 		lt_use_bw:1;	     /* use lt_bw as our bw estimate? */
@@ -1034,7 +1038,7 @@ __bpf_kfunc static void bbr_main(struct sock *sk, const struct rate_sample *rs)
 	u32 bw;
 
 #ifdef TCP_LEO_BBR
-	if (leo_handover_check(sk, &bbr->prior_cwnd))
+	if (leo_handover_check_by_index(sk, bbr->leo_index, &bbr->prior_cwnd))
 		return;
 #endif /* TCP_LEO_BBR */
 
@@ -1086,9 +1090,30 @@ __bpf_kfunc static void bbr_init(struct sock *sk)
 
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
 #ifdef TCP_LEO_BBR
-	leo_init(sk, &bbr->prior_cwnd);
+	struct leo *leo;
+	leo = leo_init(sk, &bbr->prior_cwnd);
+	if (leo != NULL) {
+		u32 idx = leo_index_get(leo);
+		WARN_ON(idx >= (1 << 13));
+		if (idx < (1 << 13))
+			bbr->leo_index = idx;
+		else
+			bbr->leo_index = -1;
+	} else
+		bbr->leo_index = -1;
 #endif /* TCP_LEO_BBR */
 }
+
+#ifdef TCP_LEO_BBR
+__bpf_kfunc static void bbr_release(struct sock *sk)
+{
+	struct bbr *bbr = inet_csk_ca(sk);
+
+	if (bbr->leo_index < (1 << 13))
+		leo_finish_by_index(sk, bbr->leo_index);
+	bbr->leo_index = -1;
+}
+#endif /* TCP_LEO_BBR */
 
 __bpf_kfunc static u32 bbr_sndbuf_expand(struct sock *sk)
 {
@@ -1161,6 +1186,9 @@ static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 #endif /* ! TCP_LEO_BBR */
 	.owner		= THIS_MODULE,
 	.init		= bbr_init,
+#ifdef TCP_LEO_BBR
+	.release	= bbr_release,
+#endif /* TCP_LEO_BBR */
 	.cong_control	= bbr_main,
 	.sndbuf_expand	= bbr_sndbuf_expand,
 	.undo_cwnd	= bbr_undo_cwnd,
@@ -1175,6 +1203,9 @@ BTF_SET8_START(tcp_bbr_check_kfunc_ids)
 #ifdef CONFIG_X86
 #ifdef CONFIG_DYNAMIC_FTRACE
 BTF_ID_FLAGS(func, bbr_init)
+#ifdef TCP_LEO_BBR
+BTF_ID_FLAGS(func, bbr_release)
+#endif /* TCP_LEO_BBR */
 BTF_ID_FLAGS(func, bbr_main)
 BTF_ID_FLAGS(func, bbr_sndbuf_expand)
 BTF_ID_FLAGS(func, bbr_undo_cwnd)
