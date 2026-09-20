@@ -264,9 +264,9 @@ leo_handover_timer_reset(struct leo *leo)
 		timo = LEO_HANDOVER_START + LEO_HANDOVER_INTERVAL
 		    - njiffies;
 #else /* LEO_HANDOVER_TIMER_ONLY */
-	if (njiffies < LEO_HANDOVER_START)
+	if (njiffies + LEO_HANDOVER_TIME_JITTER < LEO_HANDOVER_START)
 		timo = LEO_HANDOVER_START - njiffies;
-	else if (njiffies < LEO_HANDOVER_END)
+	else if (njiffies + LEO_HANDOVER_TIME_JITTER < LEO_HANDOVER_END)
 		timo = LEO_HANDOVER_END - njiffies;
 	else
 		timo = LEO_HANDOVER_START + LEO_HANDOVER_INTERVAL
