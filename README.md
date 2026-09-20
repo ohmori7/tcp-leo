@@ -10,7 +10,7 @@ sudo apt install build-essential linux-headers-$(uname -r) gcc
 % git clone https://github.com/ohmori7/tcp-leo.git
 % cd tcp-leo
 % make
-% sudo insmode tcp_leo
+% sudo insmod tcp_leo
 % sudo insmod tcp_leo_cubic.ko
 % sudo insmod tcp_leo_bbrv1.ko
 ```
@@ -33,11 +33,11 @@ setsockopt(socket, IPPROTO_TCP, TCP_CONGESTION, "leo-bbrv1", strlen("leo-bbrv1")
 
 ## Handover duration paramters
 
-You can change paramters of duration to stop transmissions in ms.
+You can change paramters of the timing and duration to stop transmissions in ms.
 
 ```
 /sys/module/tcp_leo/parameters/leo_handover_start_ms
-/sys/module/tcp_leo/parameters/leo_handover_end_ms
+/sys/module/tcp_leo/parameters/leo_handover_duration_ms
 ```
 
 ## Confirm/change congestion control
