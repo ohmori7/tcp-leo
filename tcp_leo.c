@@ -346,7 +346,7 @@ leo_handover(struct leo *leo)
 }
 
 __bpf_kfunc static void
-leo_handover_cb(struct timer_list *t)
+leo_handover_timeout(struct timer_list *t)
 {
 	struct leo *leo = from_timer(leo, t, handover_timer);
 	struct sock *sk = LEO_SOCKET(leo);
@@ -380,7 +380,7 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 	leo->sock = sk;
 	leo->last_snd_cwnd = last_snd_cwnd;
 
-	timer_setup(&leo->handover_timer, leo_handover_cb, 0);
+	timer_setup(&leo->handover_timer, leo_handover_timeout, 0);
 	if (is_leo_handover())
 		leo_suspend_transmission(sk, last_snd_cwnd);
 	leo_handover_timer_reset(leo);
@@ -400,7 +400,7 @@ BTF_SET8_START(leo_check_kfunc_ids)
 #ifdef CONFIG_DYNAMIC_FTRACE
 BTF_ID_FLAGS(func, leo_suspend_transmission)
 BTF_ID_FLAGS(func, leo_resume_transmission)
-BTF_ID_FLAGS(func, leo_handover_cb)
+BTF_ID_FLAGS(func, leo_handover_timeout)
 BTF_ID_FLAGS(func, leo_init)
 BTF_ID_FLAGS(func, leo_finish)
 #endif
