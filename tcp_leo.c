@@ -6,10 +6,10 @@
 #include "tcp_leo.h"
 
 /*
- * We could not hold hrtimer here in struct bictcp because of
- * build failure of sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE.
- * In addition, hrtimer may be difficult to handle with socket
- * for locking.
+ * We could not have timer in congestion control private region
+ * because of limited space, ICSK_CA_PRIV_SIZE.
+ * For CUBIC, we could not have hrtimer because:
+ * 	sizeof(struct bictcp) > ICSK_CA_PRIV_SIZE.
  * In case BBR, sizeof(struct bbr) == ICSK_CA_PRIVE_SIZE,
  * and there is no space available.
  */
