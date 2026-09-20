@@ -108,7 +108,7 @@ leo_jiffies_sync(struct hrtimer *hrt)
 
 	njiffies = leo_jiffies_base_compute();
 
-	DP("LEO: sync jiffies: old: %lld, new: %lld, diff %lld.%09lld\n",
+	DP("LEO: sync jiffies: old: %lld, new: %lld, diff %lld.%09lld",
 	    leo_jiffies_base, njiffies,
 	    ((njiffies - leo_jiffies_base + HZ / 2) / HZ / NSEC_PER_SEC) % SEC_PER_MIN,
 	    (((njiffies - leo_jiffies_base + HZ / 2) / HZ) % NSEC_PER_SEC) *
@@ -229,7 +229,7 @@ leo_resume_transmission(struct sock *sk, u32 last_snd_cwnd)
 	 */
 	if (sk->sk_socket &&
 	    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
-		DP("LEO[%p]: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u\n",
+		DP("LEO[%p]: wake up SOCK_NOSPACE: sndbuf: %u, wmem_queued: %u",
 		    sk, READ_ONCE(sk->sk_sndbuf), READ_ONCE(sk->sk_wmem_queued));
 		/*
 		 * we cannot use INDIRECT_CALL_1() here.
@@ -269,7 +269,7 @@ leo_handover_timer_reset(struct leo *leo)
 		    - njiffies;
 #endif /* ! LEO_HANDOVER_TIMER_ONLY */
 	DP("LEO[%p]: handover: timer reset: timo (ms): %lld, start: %llu, time: %llu, "
-	    "end: %llu, int.: %llu, nsec (ms): %llu\n",
+	    "end: %llu, int.: %llu, nsec (ms): %llu",
 	    sk, timo / NSEC_PER_MSEC / HZ, LEO_HANDOVER_START / HZ,
 	    LEO_HANDOVER_TIME / HZ, LEO_HANDOVER_END / HZ,
 	    LEO_HANDOVER_INTERVAL / HZ, njiffies / HZ);
@@ -296,11 +296,11 @@ leo_handover_start(struct sock *sk, u32 *last_snd_cwndp)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (tcp_snd_cwnd(tp) == 0) {
-		DP("LEO[%p]: handover: start: already started???\n", sk);
+		DP("LEO[%p]: handover: start: already started???", sk);
 		return;
 	}
 
-	DP("LEO[%p]: handover: start: cwnd: %d, inflight: %d\n",
+	DP("LEO[%p]: handover: start: cwnd: %d, inflight: %d",
 	    sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
 
 	leo_suspend_transmission(sk, last_snd_cwndp);
@@ -312,13 +312,13 @@ leo_handover_end(struct sock *sk, u32 last_snd_cwnd)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (tcp_snd_cwnd(tp) != 0) {
-		DP("LEO[%p]: handover: end: already cwnd recovered???\n", sk);
+		DP("LEO[%p]: handover: end: already cwnd recovered???", sk);
 		return;
 	}
 
 	leo_resume_transmission(sk, last_snd_cwnd);
 
-	DP("LEO[%p]: handover: end: recover: cwnd: %d, inflight: %d\n",
+	DP("LEO[%p]: handover: end: recover: cwnd: %d, inflight: %d",
 	    sk, tcp_snd_cwnd(tp), tcp_packets_in_flight(tp));
 }
 
@@ -333,13 +333,13 @@ leo_handover_check(struct sock *sk, u32 *last_snd_cwnd)
 #else /* LEO_HANDOVER_TIMER_ONLY */
 	if (is_leo_handover()) {
 		if (tcp_snd_cwnd(tp) != 0) {
-			DP("LEO[%p]: handover: missing transmission suspension???\n", sk);
+			DP("LEO[%p]: handover: missing transmission suspension???", sk);
 			leo_handover_start(sk, last_snd_cwnd);
 		}
 		return true;
 	}
 	if (tcp_snd_cwnd(tp) == 0) {
-		DP("LEO[%p]: handover: unrecovered??? forcely recover cwnd.\n", sk);
+		DP("LEO[%p]: handover: unrecovered??? forcely recover cwnd.", sk);
 		leo_handover_end(sk, *last_snd_cwnd);
 	}
 #endif /* ! LEO_HANDOVER_TIMER_ONLY */
@@ -400,7 +400,7 @@ leo_handover_timeout(struct timer_list *t)
 #else /* TCP_LEO_HRTIMER */
 		sk_reset_timer(sk, &leo->handover_timer, jiffies + 1);
 #endif /* ! TCP_LEO_HRTIMER */
-		DP("LEO[%p]: socket is owned by user\n", sk);
+		DP("LEO[%p]: socket is owned by user", sk);
 	} else if (sk->sk_state != TCP_ESTABLISHED)
 		leo_finish(leo);
 	else
@@ -424,10 +424,10 @@ leo_init(struct sock *sk, u32 *last_snd_cwnd)
 
 	leo = kmalloc(sizeof(*leo), GFP_ATOMIC);
 	if (leo == NULL) {
-		DP("LEO[%p]: allocation failure\n", sk);
+		DP("LEO[%p]: allocation failure", sk);
 		return;
 	}
-	DP("LEO[%p]: allocate: %p\n", sk, leo);
+	DP("LEO[%p]: allocate: %p", sk, leo);
 
 	leo->sock = sk;
 	leo->last_snd_cwnd = last_snd_cwnd;
@@ -449,7 +449,7 @@ __bpf_kfunc static void
 leo_finish(struct leo *leo)
 {
 
-	DP("LEO[%p]: free: %p\n", LEO_SOCKET(leo), leo);
+	DP("LEO[%p]: free: %p", LEO_SOCKET(leo), leo);
 	kfree(leo);
 }
 
@@ -480,7 +480,7 @@ leo_register(void)
 		return ret;
 
 	leo_time_init();
-	DP("LEO: time: %lld.%09lld\n",
+	DP("LEO: time: %lld.%09lld",
 	    leo_time() / NSEC_PER_SEC, leo_time() % NSEC_PER_SEC);
 
 	return 0;
