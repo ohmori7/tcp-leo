@@ -67,6 +67,7 @@ module_param(leo_handover_duration_ms, uint, 0644);
 MODULE_PARM_DESC(leo_handover_duration_ms, "duration of handover (0<=duration<=1000)");
 
 #define LEO_SIZE_DEFAULT 128
+#define LEO_INDEX_INIT	1
 static u32 leo_index = 0;
 static u32 leo_size = 0;
 static struct leo **leos = NULL;
@@ -388,10 +389,10 @@ leo_handover_check_by_index(struct sock *sk, u32 idx)
 {
 	struct leo *leo;
 
-	WARN_ON(idx >= leo_size);
-	if (idx >= leo_size)
+	WARN_ON(idx > leo_size);
+	if (idx > leo_size)
 		return false;
-	leo = leos[idx];
+	leo = leos[idx - 1];
 	if (leo == NULL || leo->sock != sk)
 		return false;
 	return leo_handover_check(leo);
@@ -467,17 +468,21 @@ leo_handover_timeout(struct timer_list *t)
 #endif /* TCP_LEO_HRTIMER */
 }
 
-#define LEO_INDEX_NONE	((u32)(s32)-1)
 static u32
 leo_index_next(void)
 {
 	u32 i;
 
-	for (i = leo_index; i < leo_size; i++)
-		if (leos[i] == NULL)
+	WARN_ON(leo_index == LEO_INDEX_NONE);
+	WARN_ON(leo_index > leo_size);
+	if (leo_index == LEO_INDEX_NONE ||
+	    leo_index > leo_size)
+		return LEO_INDEX_NONE;
+	for (i = leo_index; i <= leo_size; i++)
+		if (leos[i - 1] == NULL)
 			return i;
-	for (i = 0; i < leo_index; i++)
-		if (leos[i] == NULL)
+	for (i = LEO_INDEX_INIT; i < leo_index; i++)
+		if (leos[i - 1] == NULL)
 			return i;
 	return LEO_INDEX_NONE;
 }
@@ -489,7 +494,7 @@ leo_index_alloc(struct leo *leo)
 	mutex_lock(&leo_lock);
 	leo->index = leo_index_next();
 	if (leo->index != LEO_INDEX_NONE) {
-		leos[leo->index] = leo;
+		leos[leo->index - 1] = leo;
 		leo_index = leo->index;
 	}
 	mutex_unlock(&leo_lock);
@@ -500,6 +505,8 @@ u32
 leo_index_get(struct leo *leo)
 {
 
+	if (leo == NULL)
+		return LEO_INDEX_NONE;
 	return leo->index;
 }
 EXPORT_SYMBOL(leo_index_get);
@@ -509,13 +516,15 @@ leo_index_free(struct leo *leo)
 {
 
 	mutex_lock(&leo_lock);
-	WARN_ON(leo->index >= leo_size);
-	WARN_ON(leos[leo->index] != leo);
-	if (leo->index < leo_size &&
-	    leos[leo->index] == leo)
-		leos[leo->index] = NULL;
-	mutex_unlock(&leo_lock);
+	WARN_ON(leo->index == LEO_INDEX_NONE);
+	WARN_ON(leo->index > leo_size);
+	WARN_ON(leos[leo->index - 1] != leo);
+	if (leo->index != LEO_INDEX_NONE &&
+	    leo->index <= leo_size &&
+	    leos[leo->index - 1] == leo)
+		leos[leo->index - 1] = NULL;
 	leo->index = LEO_INDEX_NONE;
+	mutex_unlock(&leo_lock);
 }
 
 static struct leo *
@@ -523,11 +532,14 @@ leo_lookup(struct sock *sk, u32 idx)
 {
 	struct leo *leo;
 
-	WARN_ON(idx >= leo_size);
-	if (idx >= leo_size)
+	if (idx == LEO_INDEX_NONE)
 		return NULL;
-	leo = leos[idx];
-	WARN_ON(leo == NULL || leo->sock != sk);
+	WARN_ON(idx > leo_size);
+	if (idx > leo_size)
+		return NULL;
+	leo = leos[idx - 1];
+	WARN_ON(leo == NULL);
+	WARN_ON(leo->sock != sk);
 	if (leo == NULL || leo->sock != sk)
 		return NULL;
 	return leo;
@@ -571,8 +583,12 @@ __bpf_kfunc void
 leo_finish(struct leo *leo)
 {
 
-	WARN_ON(leo == NULL || leo->index >= leo_size);
-	if (leo == NULL || leo->index >= leo_size)
+	WARN_ON(leo == NULL);
+	WARN_ON(leo->index == LEO_INDEX_NONE);
+	WARN_ON(leo->index > leo_size);
+	if (leo == NULL ||
+	    leo->index == LEO_INDEX_NONE ||
+	    leo->index > leo_size)
 		return;
 
 #ifdef TCP_LEO_HRTIMER
@@ -629,6 +645,7 @@ leo_register(void)
 	}
 
 	leo_size = LEO_SIZE_DEFAULT;
+	leo_index = LEO_INDEX_INIT;
 	leo_time_init();
 	DP("LEO: time: %lld.%09lld",
 	    leo_time() / NSEC_PER_SEC, leo_time() % NSEC_PER_SEC);
@@ -641,8 +658,9 @@ leo_unregister(void)
 {
 
 	kfree(leos);
+	leos = NULL;
 	leo_size = 0;
-	leo_index = 0;
+	leo_index = LEO_INDEX_NONE;
 	leo_time_finish();
 }
 

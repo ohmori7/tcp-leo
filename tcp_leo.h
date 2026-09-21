@@ -5,6 +5,8 @@ extern bool leo_debug __read_mostly;
 #define DP(fmt, ...)	if (leo_debug) leo_printk("%s: " fmt "\n", __func__, ##__VA_ARGS__)
 #endif /* ! LEO_NODEBUG */
 
+#define LEO_INDEX_NONE	0
+
 struct leo;
 
 void leo_printk(const char *, ...);

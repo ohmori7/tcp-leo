@@ -1090,17 +1090,7 @@ __bpf_kfunc static void bbr_init(struct sock *sk)
 
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
 #ifdef TCP_LEO_BBR
-	struct leo *leo;
-	leo = leo_init(sk);
-	if (leo != NULL) {
-		u32 idx = leo_index_get(leo);
-		WARN_ON(idx >= (1 << 13));
-		if (idx < (1 << 13))
-			bbr->leo_index = idx;
-		else
-			bbr->leo_index = -1;
-	} else
-		bbr->leo_index = -1;
+	bbr->leo_index = leo_index_get(leo_init(sk));
 #endif /* TCP_LEO_BBR */
 }
 
@@ -1109,9 +1099,8 @@ __bpf_kfunc static void bbr_release(struct sock *sk)
 {
 	struct bbr *bbr = inet_csk_ca(sk);
 
-	if (bbr->leo_index < (1 << 13))
-		leo_finish_by_index(sk, bbr->leo_index);
-	bbr->leo_index = -1;
+	leo_finish_by_index(sk, bbr->leo_index);
+	bbr->leo_index = LEO_INDEX_NONE;
 }
 #endif /* TCP_LEO_BBR */
 
