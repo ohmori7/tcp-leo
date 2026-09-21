@@ -72,6 +72,29 @@ static u32 leo_size = 0;
 static struct leo **leos = NULL;
 static DEFINE_MUTEX(leo_lock);
 
+void
+leo_printk(const char *fmt, ...)
+{
+	struct timespec64 ts;
+	va_list args;
+#define LEO_DEBUG_BUFSIZE	256
+	char buf[LEO_DEBUG_BUFSIZE];
+	int len;
+
+	ktime_get_real_ts64(&ts);
+	len = snprintf(buf, sizeof(buf), "[%02lld.%09ld] ",
+	    ts.tv_sec % 60, ts.tv_nsec);
+	if (len <= 0)
+		return;
+	va_start(args, fmt);
+	len = vsnprintf(buf + len, sizeof(buf) - len, fmt, args);
+	buf[sizeof(buf) - 1] = '\0'; /* just in case. */
+	va_end(args);
+	if (len > 0)
+		printk(buf);
+}
+EXPORT_SYMBOL(leo_printk);
+
 static s64
 leo_jiffies_base_compute(void)
 {

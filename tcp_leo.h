@@ -2,11 +2,12 @@
 #define DP(...)
 #else /* LEO_NODEBUG */
 extern bool leo_debug __read_mostly;
-#define DP(fmt, ...)	if (leo_debug) printk("%s: " fmt "\n", __func__, ##__VA_ARGS__)
+#define DP(fmt, ...)	if (leo_debug) leo_printk("%s: " fmt "\n", __func__, ##__VA_ARGS__)
 #endif /* ! LEO_NODEBUG */
 
 struct leo;
 
+void leo_printk(const char *, ...);
 bool leo_handover_check(struct leo *);
 bool leo_handover_check_by_index(struct sock *, u32);
 u32 leo_index_get(struct leo *);
