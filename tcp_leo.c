@@ -96,6 +96,84 @@ leo_printk(const char *fmt, ...)
 }
 EXPORT_SYMBOL(leo_printk);
 
+static u32
+leo_index_next(void)
+{
+	u32 i;
+
+	WARN_ON(leo_index == LEO_INDEX_NONE);
+	WARN_ON(leo_index > leo_size);
+	if (leo_index == LEO_INDEX_NONE ||
+	    leo_index > leo_size)
+		return LEO_INDEX_NONE;
+	for (i = leo_index; i <= leo_size; i++)
+		if (leos[i - 1] == NULL)
+			return i;
+	for (i = LEO_INDEX_INIT; i < leo_index; i++)
+		if (leos[i - 1] == NULL)
+			return i;
+	return LEO_INDEX_NONE;
+}
+
+static bool
+leo_index_alloc(struct leo *leo)
+{
+
+	mutex_lock(&leo_lock);
+	leo->index = leo_index_next();
+	if (leo->index != LEO_INDEX_NONE) {
+		leos[leo->index - 1] = leo;
+		leo_index = leo->index;
+	}
+	mutex_unlock(&leo_lock);
+	return (leo->index != LEO_INDEX_NONE);
+}
+
+u32
+leo_index_get(struct leo *leo)
+{
+
+	if (leo == NULL)
+		return LEO_INDEX_NONE;
+	return leo->index;
+}
+EXPORT_SYMBOL(leo_index_get);
+
+static void
+leo_index_free(struct leo *leo)
+{
+
+	mutex_lock(&leo_lock);
+	WARN_ON(leo->index == LEO_INDEX_NONE);
+	WARN_ON(leo->index > leo_size);
+	WARN_ON(leos[leo->index - 1] != leo);
+	if (leo->index != LEO_INDEX_NONE &&
+	    leo->index <= leo_size &&
+	    leos[leo->index - 1] == leo)
+		leos[leo->index - 1] = NULL;
+	leo->index = LEO_INDEX_NONE;
+	mutex_unlock(&leo_lock);
+}
+
+static struct leo *
+leo_lookup(struct sock *sk, u32 idx)
+{
+	struct leo *leo;
+
+	if (idx == LEO_INDEX_NONE)
+		return NULL;
+	WARN_ON(idx > leo_size);
+	if (idx > leo_size)
+		return NULL;
+	leo = leos[idx - 1];
+	WARN_ON(leo == NULL);
+	WARN_ON(leo->sock != sk);
+	if (leo == NULL || leo->sock != sk)
+		return NULL;
+	return leo;
+}
+
+
 static s64
 leo_jiffies_base_compute(void)
 {
@@ -466,83 +544,6 @@ leo_handover_timeout(struct timer_list *t)
 #ifdef TCP_LEO_HRTIMER
 	return HRTIMER_NORESTART;
 #endif /* TCP_LEO_HRTIMER */
-}
-
-static u32
-leo_index_next(void)
-{
-	u32 i;
-
-	WARN_ON(leo_index == LEO_INDEX_NONE);
-	WARN_ON(leo_index > leo_size);
-	if (leo_index == LEO_INDEX_NONE ||
-	    leo_index > leo_size)
-		return LEO_INDEX_NONE;
-	for (i = leo_index; i <= leo_size; i++)
-		if (leos[i - 1] == NULL)
-			return i;
-	for (i = LEO_INDEX_INIT; i < leo_index; i++)
-		if (leos[i - 1] == NULL)
-			return i;
-	return LEO_INDEX_NONE;
-}
-
-static bool
-leo_index_alloc(struct leo *leo)
-{
-
-	mutex_lock(&leo_lock);
-	leo->index = leo_index_next();
-	if (leo->index != LEO_INDEX_NONE) {
-		leos[leo->index - 1] = leo;
-		leo_index = leo->index;
-	}
-	mutex_unlock(&leo_lock);
-	return (leo->index != LEO_INDEX_NONE);
-}
-
-u32
-leo_index_get(struct leo *leo)
-{
-
-	if (leo == NULL)
-		return LEO_INDEX_NONE;
-	return leo->index;
-}
-EXPORT_SYMBOL(leo_index_get);
-
-static void
-leo_index_free(struct leo *leo)
-{
-
-	mutex_lock(&leo_lock);
-	WARN_ON(leo->index == LEO_INDEX_NONE);
-	WARN_ON(leo->index > leo_size);
-	WARN_ON(leos[leo->index - 1] != leo);
-	if (leo->index != LEO_INDEX_NONE &&
-	    leo->index <= leo_size &&
-	    leos[leo->index - 1] == leo)
-		leos[leo->index - 1] = NULL;
-	leo->index = LEO_INDEX_NONE;
-	mutex_unlock(&leo_lock);
-}
-
-static struct leo *
-leo_lookup(struct sock *sk, u32 idx)
-{
-	struct leo *leo;
-
-	if (idx == LEO_INDEX_NONE)
-		return NULL;
-	WARN_ON(idx > leo_size);
-	if (idx > leo_size)
-		return NULL;
-	leo = leos[idx - 1];
-	WARN_ON(leo == NULL);
-	WARN_ON(leo->sock != sk);
-	if (leo == NULL || leo->sock != sk)
-		return NULL;
-	return leo;
 }
 
 __bpf_kfunc struct leo *
