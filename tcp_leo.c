@@ -546,6 +546,38 @@ leo_handover_timeout(struct timer_list *t)
 #endif /* TCP_LEO_HRTIMER */
 }
 
+static void
+leo_handover_enable(struct leo *leo)
+{
+
+	if (is_leo_handover())
+		leo_suspend_transmission(leo);
+	leo_handover_timer_reset(leo);
+}
+
+void
+leo_handover_disable(struct leo *leo)
+{
+
+	if (leo == NULL)
+		return;
+#ifdef TCP_LEO_HRTIMER
+	if (hrtimer_try_to_cancel(&leo->handover_timer) == 1)
+		sock_put(leo->sock);
+#else
+	sk_stop_timer(&leo->handover_timer);
+#endif /* ! TCP_LEO_HRTIMER */
+}
+EXPORT_SYMBOL(leo_handover_disable);
+
+void
+leo_handover_disable_by_index(struct sock *sk, u32 idx)
+{
+
+	leo_handover_disable(leo_lookup(sk, idx));
+}
+EXPORT_SYMBOL(leo_handover_disable_by_index);
+
 __bpf_kfunc struct leo *
 leo_init(struct sock *sk)
 {
@@ -573,9 +605,7 @@ leo_init(struct sock *sk)
 #else /* TCP_LEO_HRTIMER */
 	timer_setup(&leo->handover_timer, leo_handover_timeout, 0);
 #endif /* TCP_LEO_HRTIMER */
-	if (is_leo_handover())
-		leo_suspend_transmission(leo);
-	leo_handover_timer_reset(leo);
+	leo_handover_enable(leo);
 	return leo;
 }
 EXPORT_SYMBOL(leo_init);
@@ -592,12 +622,9 @@ leo_finish(struct leo *leo)
 	    leo->index > leo_size)
 		return;
 
-#ifdef TCP_LEO_HRTIMER
-	if (hrtimer_try_to_cancel(&leo->handover_timer) == 1)
-                sock_put(leo->sock);
-#endif /* TCP_LEO_HRTIMER */
-
 	DP("LEO[%u:%p]: free: %p", leo->index, LEO_SOCKET(leo), leo);
+
+	leo_handover_disable(leo);
 	leo_index_free(leo);
 	kfree(leo);
 }
