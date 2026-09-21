@@ -173,7 +173,6 @@ leo_lookup(struct sock *sk, u32 idx)
 	return leo;
 }
 
-
 static s64
 leo_jiffies_base_compute(void)
 {
