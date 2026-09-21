@@ -671,4 +671,4 @@ MODULE_AUTHOR("Motoyuki OHMORI");
 /* XXX: i would like to make this BSD license but hrtimer() is under GPL... */
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("TCP LEO for Starlink");
-MODULE_VERSION("0.1");
+MODULE_VERSION("0.2");
