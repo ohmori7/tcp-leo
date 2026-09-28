@@ -337,6 +337,17 @@ __bpf_kfunc static u32 bbr_min_tso_segs(struct sock *sk)
 	return READ_ONCE(sk->sk_pacing_rate) < (bbr_min_tso_rate >> 3) ? 1 : 2;
 }
 
+#ifdef NEW_CC
+__bpf_kfunc static u32 bbr_tso_segs(struct sock *sk, unsigned int mss_now)
+{
+	u32 min_tso, tso_segs;
+
+	min_tso = bbr_min_tso_segs(sk);
+	tso_segs = tcp_tso_autosize(sk, mss_now, min_tso);
+	return min_t(u32, tso_segs, sk->sk_gso_max_segs);
+}
+#endif /* NEW_CC */
+
 static u32 bbr_tso_segs_goal(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -1089,7 +1100,12 @@ static void bbr_update_model(struct sock *sk, const struct rate_sample *rs)
 	bbr_update_gains(sk);
 }
 
+#ifdef NEW_CC
+__bpf_kfunc static void bbr_main(struct sock *sk, u32 ack, int flag,
+				 const struct rate_sample *rs)
+#else /* NEW_CC */
 __bpf_kfunc static void bbr_main(struct sock *sk, const struct rate_sample *rs)
+#endif /* ! NEW_CC */
 {
 	struct bbr *bbr = inet_csk_ca(sk);
 	u32 bw;
@@ -1215,7 +1231,11 @@ static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 	.undo_cwnd	= bbr_undo_cwnd,
 	.cwnd_event	= bbr_cwnd_event,
 	.ssthresh	= bbr_ssthresh,
+#ifdef NEW_CC
+	.tso_segs	= bbr_tso_segs,
+#else /* NEW_CC */
 	.min_tso_segs	= bbr_min_tso_segs,
+#endif /* ! NEW_CC */
 	.get_info	= bbr_get_info,
 	.set_state	= bbr_set_state,
 };

@@ -722,7 +722,12 @@ end:
 	pcc->delivered_base = tsk->delivered;
 }
 
+#ifdef NEW_CC
+static void pcc_process_sample(struct sock *sk, u32 ack, int flag,
+			       const struct rate_sample *rs)
+#else /* NEW_CC */
 static void pcc_process_sample(struct sock *sk, const struct rate_sample *rs)
+#endif /* ! NEW_CC */
 {
 	pcc_process(sk);
 }

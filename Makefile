@@ -1,24 +1,12 @@
-# in-tree kernel variable.
-obj-m := tcp_leo.o tcp_leo_cubic.o tcp_leo_bbrv1.o tcp_bbrv1.o
-#obj-m += tcp_bbrv3.o
-obj-m +=  tcp_sat_pipe_bbrv1.o
 #
-obj-m += tcp_illinois.o
+DIR=	/lib/modules/$(shell uname -r)/build
+PWD=	$(shell pwd)
 #
-obj-m += tcp_pcc_alegro.o
-obj-m += tcp_pcc_vivace.o
-
-# do not allow any warnings.
-ccflags-y += -Werror
-
-CFLAGS_tcp_leo_cubic.o := -DTCP_LEO_CUBIC
-CFLAGS_tcp_leo_bbrv1.o := -DTCP_LEO_BBR
-#CFLAGS_tcp_bbrv3.o := -I/usr/src/linux-source-6.8.0/linux-source-6.8.0-87.88/net/ipv4/
-#CFLAGS_tcp_bbrv3.o := -I$(SRC)/net/ipv4
-
+NEW_CC := $(shell							\
+	$(MAKE) -C $(DIR) M=$(PWD)/conftest modules >/dev/null 2>&1 &&	\
+	echo Y || echo N)
 # out-of-tree rules.
-DIR=	/lib/modules/`uname -r`/build
 all:
-	make -C $(DIR) M=$(PWD) modules
+	make -C $(DIR) M=$(PWD) KDIR=$(DIR) NEW_CC=$(NEW_CC) modules
 clean:
 	make -C $(DIR) M=$(PWD) clean

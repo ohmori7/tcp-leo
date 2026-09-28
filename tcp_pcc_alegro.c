@@ -457,7 +457,12 @@ pcc_update_interval(struct pcc_interval *interval,  struct pcc_data *pcc,
 	interval->delivered += tcp_sk(sk)->delivered - pcc->delivered_base;
 }
 
+#ifdef NEW_CC
+static void pcc_process_sample(struct sock *sk, u32 ack, int flag,
+			       const struct rate_sample *rs)
+#else /* NEW_CC */
 static void pcc_process_sample(struct sock *sk, const struct rate_sample *rs)
+#endif /* ! NEW_CC */
 {
 	struct pcc_data *pcc = inet_csk_ca(sk);
 	struct tcp_sock *tsk = tcp_sk(sk);
