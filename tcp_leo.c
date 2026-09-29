@@ -637,7 +637,7 @@ leo_finish_by_index(struct sock *sk, u32 idx)
 }
 EXPORT_SYMBOL(leo_finish_by_index);
 
-BTF_SET8_START(leo_check_kfunc_ids)
+BTF_KFUNCS_START(leo_check_kfunc_ids)
 #ifdef CONFIG_X86
 #ifdef CONFIG_DYNAMIC_FTRACE
 BTF_ID_FLAGS(func, leo_suspend_transmission)
@@ -648,7 +648,7 @@ BTF_ID_FLAGS(func, leo_finish)
 BTF_ID_FLAGS(func, leo_finish_by_index)
 #endif
 #endif
-BTF_SET8_END(leo_check_kfunc_ids)
+BTF_KFUNCS_END(leo_check_kfunc_ids)
 
 static const struct btf_kfunc_id_set leo_kfunc_set = {
 	.owner = THIS_MODULE,

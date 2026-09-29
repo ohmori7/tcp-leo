@@ -1,3 +1,5 @@
+#include "compat.h"
+
 #ifdef LEO_NODEBUG
 #define DP(...)
 #else /* LEO_NODEBUG */

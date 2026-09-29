@@ -65,6 +65,8 @@
 #include <linux/random.h>
 #include <linux/win_minmax.h>
 
+#include "compat.h"
+
 /* Scale factor for rate in pkt/uSec unit to avoid truncation in bandwidth
  * estimation. The rate unit ~= (1500 bytes / 1 usec / 2^24) ~= 715 bps.
  * This handles bandwidths from 0.06pps (715bps) to 256Mpps (3Tbps) in a u32.
@@ -296,17 +298,17 @@ static void bbr_set_pacing_rate(struct sock *sk, u32 bw, int gain)
 }
 
 /* override sysctl_tcp_min_tso_segs */
-__bpf_kfunc static u32 bbr_min_tso_segs(struct sock *sk)
+__bpf_kfunc static u32 bbrv1_min_tso_segs(struct sock *sk)
 {
 	return READ_ONCE(sk->sk_pacing_rate) < (bbr_min_tso_rate >> 3) ? 1 : 2;
 }
 
 #ifdef NEW_CC
-__bpf_kfunc static u32 bbr_tso_segs(struct sock *sk, unsigned int mss_now)
+__bpf_kfunc static u32 bbrv1_tso_segs(struct sock *sk, unsigned int mss_now)
 {
 	u32 min_tso, tso_segs;
 
-	min_tso = bbr_min_tso_segs(sk);
+	min_tso = bbrv1_min_tso_segs(sk);
 	tso_segs = tcp_tso_autosize(sk, mss_now, min_tso);
 	return min_t(u32, tso_segs, sk->sk_gso_max_segs);
 }
@@ -323,7 +325,7 @@ static u32 bbr_tso_segs_goal(struct sock *sk)
 	bytes = min_t(unsigned long,
 		      READ_ONCE(sk->sk_pacing_rate) >> READ_ONCE(sk->sk_pacing_shift),
 		      GSO_LEGACY_MAX_SIZE - 1 - MAX_TCP_HEADER);
-	segs = max_t(u32, bytes / tp->mss_cache, bbr_min_tso_segs(sk));
+	segs = max_t(u32, bytes / tp->mss_cache, bbrv1_min_tso_segs(sk));
 
 	return min(segs, 0x7FU);
 }
@@ -340,7 +342,7 @@ static void bbr_save_cwnd(struct sock *sk)
 		bbr->prior_cwnd = max(bbr->prior_cwnd, tcp_snd_cwnd(tp));
 }
 
-__bpf_kfunc static void bbr_cwnd_event(struct sock *sk, enum tcp_ca_event event)
+__bpf_kfunc static void bbrv1_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct bbr *bbr = inet_csk_ca(sk);
@@ -1036,10 +1038,10 @@ static void bbr_update_model(struct sock *sk, const struct rate_sample *rs)
 }
 
 #ifdef NEW_CC
-__bpf_kfunc static void bbr_main(struct sock *sk, u32 ack, int flag,
-				 const struct rate_sample *rs)
+__bpf_kfunc static void bbrv1_main(struct sock *sk, u32 ack, int flag,
+				   const struct rate_sample *rs)
 #else /* NEW_CC */
-__bpf_kfunc static void bbr_main(struct sock *sk, const struct rate_sample *rs)
+__bpf_kfunc static void bbrv1_main(struct sock *sk, const struct rate_sample *rs)
 #endif /* ! NEW_CC */
 {
 	struct bbr *bbr = inet_csk_ca(sk);
@@ -1052,7 +1054,7 @@ __bpf_kfunc static void bbr_main(struct sock *sk, const struct rate_sample *rs)
 	bbr_set_cwnd(sk, rs, rs->acked_sacked, bw, bbr->cwnd_gain);
 }
 
-__bpf_kfunc static void bbr_init(struct sock *sk)
+__bpf_kfunc static void bbrv1_init(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct bbr *bbr = inet_csk_ca(sk);
@@ -1094,7 +1096,7 @@ __bpf_kfunc static void bbr_init(struct sock *sk)
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
 }
 
-__bpf_kfunc static u32 bbr_sndbuf_expand(struct sock *sk)
+__bpf_kfunc static u32 bbrv1_sndbuf_expand(struct sock *sk)
 {
 	/* Provision 3 * cwnd since BBR may slow-start even during recovery. */
 	return 3;
@@ -1103,7 +1105,7 @@ __bpf_kfunc static u32 bbr_sndbuf_expand(struct sock *sk)
 /* In theory BBR does not need to undo the cwnd since it does not
  * always reduce cwnd on losses (see bbr_main()). Keep it for now.
  */
-__bpf_kfunc static u32 bbr_undo_cwnd(struct sock *sk)
+__bpf_kfunc static u32 bbrv1_undo_cwnd(struct sock *sk)
 {
 	struct bbr *bbr = inet_csk_ca(sk);
 
@@ -1114,7 +1116,7 @@ __bpf_kfunc static u32 bbr_undo_cwnd(struct sock *sk)
 }
 
 /* Entering loss recovery, so save cwnd for when we exit or undo recovery. */
-__bpf_kfunc static u32 bbr_ssthresh(struct sock *sk)
+__bpf_kfunc static u32 bbrv1_ssthresh(struct sock *sk)
 {
 	bbr_save_cwnd(sk);
 	return tcp_sk(sk)->snd_ssthresh;
@@ -1142,7 +1144,7 @@ static size_t bbr_get_info(struct sock *sk, u32 ext, int *attr,
 	return 0;
 }
 
-__bpf_kfunc static void bbr_set_state(struct sock *sk, u8 new_state)
+__bpf_kfunc static void bbrv1_set_state(struct sock *sk, u8 new_state)
 {
 	struct bbr *bbr = inet_csk_ca(sk);
 
@@ -1160,35 +1162,38 @@ static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 	.flags		= TCP_CONG_NON_RESTRICTED,
 	.name		= "bbrv1",
 	.owner		= THIS_MODULE,
-	.init		= bbr_init,
-	.cong_control	= bbr_main,
-	.sndbuf_expand	= bbr_sndbuf_expand,
-	.undo_cwnd	= bbr_undo_cwnd,
-	.cwnd_event	= bbr_cwnd_event,
-	.ssthresh	= bbr_ssthresh,
+	.init		= bbrv1_init,
+	.cong_control	= bbrv1_main,
+	.sndbuf_expand	= bbrv1_sndbuf_expand,
+	.undo_cwnd	= bbrv1_undo_cwnd,
+	.cwnd_event	= bbrv1_cwnd_event,
+	.ssthresh	= bbrv1_ssthresh,
 #ifdef NEW_CC
-	.tso_segs	= bbr_tso_segs,
+	.tso_segs	= bbrv1_tso_segs,
 #else /* NEW_CC */
-	.min_tso_segs	= bbr_min_tso_segs,
+	.min_tso_segs	= bbrv1_min_tso_segs,
 #endif /* ! NEW_CC */
 	.get_info	= bbr_get_info,
-	.set_state	= bbr_set_state,
+	.set_state	= bbrv1_set_state,
 };
 
-BTF_SET8_START(tcp_bbr_check_kfunc_ids)
+BTF_KFUNCS_START(tcp_bbr_check_kfunc_ids)
 #ifdef CONFIG_X86
 #ifdef CONFIG_DYNAMIC_FTRACE
-BTF_ID_FLAGS(func, bbr_init)
-BTF_ID_FLAGS(func, bbr_main)
-BTF_ID_FLAGS(func, bbr_sndbuf_expand)
-BTF_ID_FLAGS(func, bbr_undo_cwnd)
-BTF_ID_FLAGS(func, bbr_cwnd_event)
-BTF_ID_FLAGS(func, bbr_ssthresh)
-BTF_ID_FLAGS(func, bbr_min_tso_segs)
-BTF_ID_FLAGS(func, bbr_set_state)
+BTF_ID_FLAGS(func, bbrv1_init)
+BTF_ID_FLAGS(func, bbrv1_main)
+BTF_ID_FLAGS(func, bbrv1_sndbuf_expand)
+BTF_ID_FLAGS(func, bbrv1_undo_cwnd)
+BTF_ID_FLAGS(func, bbrv1_cwnd_event)
+BTF_ID_FLAGS(func, bbrv1_ssthresh)
+#ifdef NEW_CC
+BTF_ID_FLAGS(func, bbrv1_tso_segs)
+#endif /* NEW_CC */
+BTF_ID_FLAGS(func, bbrv1_min_tso_segs)
+BTF_ID_FLAGS(func, bbrv1_set_state)
 #endif
 #endif
-BTF_SET8_END(tcp_bbr_check_kfunc_ids)
+BTF_KFUNCS_END(tcp_bbr_check_kfunc_ids)
 
 static const struct btf_kfunc_id_set tcp_bbr_kfunc_set = {
 	.owner = THIS_MODULE,
