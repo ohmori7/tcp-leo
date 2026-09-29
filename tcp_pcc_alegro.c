@@ -623,7 +623,7 @@ static void pcc_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 
 static struct tcp_congestion_ops tcp_pcc_cong_ops __read_mostly = {
         .flags = TCP_CONG_NON_RESTRICTED,
-        .name = "pcc",
+        .name = "pcc-alegro",
         .owner = THIS_MODULE,
         .init = pcc_init,
         .release        = pcc_release,
