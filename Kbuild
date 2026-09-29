@@ -15,8 +15,12 @@ CFLAGS_tcp_leo_cubic.o := -DTCP_LEO_CUBIC
 CFLAGS_tcp_leo_bbrv1.o := -DTCP_LEO_BBR
 
 ifeq ($(NEW_CC),Y)
-	obj-m += tcp_bbrv3.o
 	ccflags-y += -DNEW_CC
+
+	obj-m += tcp_bbrv3.o
 	# for tcp_dctcp.h.
 	CFLAGS_tcp_bbrv3.o += -I$(KDIR)/net/ipv4/
+
+	obj-m += tcp_leo_bbrv3.o
+	CFLAGS_tcp_leo_bbrv3.o += -I$(KDIR)/net/ipv4/
 endif
