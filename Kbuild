@@ -14,8 +14,6 @@ ccflags-y += -Werror
 CFLAGS_tcp_leo_cubic.o := -DTCP_LEO_CUBIC
 CFLAGS_tcp_leo_bbrv1.o := -DTCP_LEO_BBR
 
-#$(info KBUILD_SRC=$(KBUILD_SRC))
-
 ifeq ($(NEW_CC),Y)
 	obj-m += tcp_bbrv3.o
 	ccflags-y += -DNEW_CC
