@@ -17,6 +17,7 @@ obj-m += tcp_pcc_vivace.o
 # do not allow any warnings.
 ccflags-y += -Werror
 
+# build BBRv3 with Google BBR Linux 6.13.7.
 ifeq ($(NEW_CC),Y)
 	ccflags-y += -DNEW_CC
 
