@@ -92,4 +92,3 @@ sudo dpkg -i ../*.deb
 
 ## TODO
 - secure boot support (currently, no digital signature)
-- BBRv3 support
