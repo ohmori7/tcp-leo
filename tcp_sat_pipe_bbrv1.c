@@ -233,6 +233,10 @@ static const u32 bbr_extra_acked_max_us = 100 * 1000;
 static void bbr_check_probe_rtt_done(struct sock *sk);
 
 #ifdef SATPIPE
+static uint handover_start_ms = 950;
+module_param(handover_start_ms, uint, 0644);
+MODULE_PARM_DESC(handover_start_ms, "decimal place of handover starting timing in msec (default: 950ms)");
+
 static long long int system_time_sec;
 static long int system_time_nsec;
 static int relative_time_sec;
@@ -863,12 +867,12 @@ static void bbr_update_bw(struct sock *sk, const struct rate_sample *rs)
     }
     
     if (active_flag){
-#define SAT_PIPE_ORIGINAL
-#ifdef SAT_PIPE_ORIGINAL
+#ifdef SATPIPE_ORIGINAL
         if (relative_time_sec == (OFFSET - 1) && system_time_nsec >= 950000000){
-#else/* SAT_PIPE_ORIGINAL */
-        if (relative_time_sec == (OFFSET - 1) && system_time_nsec >= 900000000){
-#endif /* ! SAT_PIPE_ORIGINAL */
+#else/* SATPIPE_ORIGINAL */
+        if (relative_time_sec == (OFFSET - 1) &&
+	    system_time_nsec >= (long long)handover_start_ms * NSEC_PER_MSEC) {
+#endif /* ! SATPIPE_ORIGINAL */
             active_flag = false;
             bbr->mode = BBR_PROBE_RTT;
 		    bbr_save_cwnd(sk);
