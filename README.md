@@ -92,3 +92,9 @@ sudo dpkg -i ../*.deb
 
 ## TODO
 - secure boot support (currently, no digital signature)
+
+## papers
+- Motoyuki Ohmori, Kohichi Ogawa, Hiroki Kashiwazaki and Takeshi Ikenaga, "TCP LEO: Congestion Control for LEO Satellite Communications in the Wild," Proc. the 51st IEEE Conference on Local Computer Networks (LCN) (short paper), 2026 Oct. (to appear)
+- Motoyuki Ohmori, Kohichi Ogawa, Hiroki Kashiwazaki and Takeshi Ikenaga, "Comparison of Congestion Controls for LEO Satellite Communications in the Wild," Proc. the 1st IEEE International Workshop on Cooperative Multi-Orbit Platform for Accessible Satellite Communication Systems (COMPASS'26) in conjunction with Consumer Communications & Networking Conference (CCNC) 2026, pp. 1-6, 2026 Jan.
+- Motoyuki Ohmori, Kohichi Ogawa, Hiroki Kashiwazaki and Takeshi Ikenaga, "LEO Satellite-Friendly TCP Congestion Control," Proc. the 20th Asian Internet Engineering Conference (AINTEC '25). Association for Computing Machinery, New York, NY, USA, 2025, pp.87–92. https://doi.org/10.1145/3763400.3763453.
+- Motoyuki Ohmori, Kohichi Ogawa, Hiroki Kashiwazaki and Takeshi Ikenaga, "A Discussion on Periodic Communication Disruption in LEO Satellite Constellations," 2025 1st International Conference on Consumer Technology (ICCT-Pacific), Matsue, Shimane, Japan, 2025, pp. 1-4, doi: 10.1109/ICCT-Pacific63901.2025.11012871.
