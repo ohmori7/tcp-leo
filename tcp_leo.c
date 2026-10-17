@@ -281,7 +281,7 @@ leo_handover_duration(struct sock *sk)
 {
 
 	(void)sk; /* XXX: different duration per socket in future. */
-	return leo_handover_start_ms + leo_handover_duration_ms;
+	return leo_handover_duration_ms;
 }
 
 __bpf_kfunc static void
