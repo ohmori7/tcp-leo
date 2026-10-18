@@ -12,6 +12,7 @@ extern bool leo_debug __read_mostly;
 struct leo;
 
 void leo_printk(const char *, ...);
+bool is_leo_recent_handover(u64);
 bool leo_handover_check(struct leo *);
 bool leo_handover_check_by_index(struct sock *, u32);
 u32 leo_index_get(struct leo *);

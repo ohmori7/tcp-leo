@@ -261,6 +261,17 @@ leo_time(void)
 }
 #endif /* ! LEO_NODEBUG */
 
+bool
+is_leo_recent_handover(u64 off_ms)
+{
+	u64 njiffies;
+
+	njiffies = leo_jiffies() % LEO_HANDOVER_INTERVAL;
+	return LEO_HANDOVER_START <= njiffies &&
+	njiffies <= LEO_HANDOVER_END + off_ms * NSEC_PER_MSEC * HZ;
+}
+EXPORT_SYMBOL(is_leo_recent_handover);
+
 /*
  * leo does scan or handover at the fixed timing,
  * 12s, 27s, 42s, 57s for each minute.
@@ -269,11 +280,8 @@ leo_time(void)
 static bool
 is_leo_handover(void)
 {
-	u64 njiffies;
 
-	njiffies = leo_jiffies() % LEO_HANDOVER_INTERVAL;
-	return LEO_HANDOVER_START <= njiffies &&
-	    njiffies <= LEO_HANDOVER_END;
+	return is_leo_recent_handover(0);
 }
 
 static unsigned long
