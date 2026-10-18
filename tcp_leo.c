@@ -281,7 +281,8 @@ leo_handover_duration(struct sock *sk)
 {
 
 	(void)sk; /* XXX: different duration per socket in future. */
-	return leo_handover_duration_ms;
+#define LEO_HANDOVER_DURATION_JITTER	50UL
+	return leo_handover_duration_ms + LEO_HANDOVER_DURATION_JITTER;
 }
 
 __bpf_kfunc static void
