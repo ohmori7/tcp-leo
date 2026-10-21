@@ -17,16 +17,9 @@ obj-m += tcp_pcc_vivace.o
 # do not allow any warnings.
 ccflags-y += -Werror
 
-# build BBRv3 with Google BBR Linux 6.13.7.
+# new congestion control call back arguments at least since Linux 6.13.7.
 ifeq ($(NEW_CC),Y)
 	ccflags-y += -DNEW_CC
-
-	obj-m += tcp_bbrv3.o
-	# for tcp_dctcp.h.
-	CFLAGS_tcp_bbrv3.o += -I$(KDIR)/net/ipv4/
-
-	obj-m += tcp_leo_bbrv3.o
-	CFLAGS_tcp_leo_bbrv3.o += -I$(KDIR)/net/ipv4/
 endif
 ifeq ($(HAVE_HRTIMER_SETUP),Y)
 	ccflags-y += -DHAVE_HRTIMER_SETUP
@@ -36,4 +29,14 @@ ifeq ($(HAVE_SK_TCP_RETRANSMIT_TIMER),Y)
 endif
 ifeq ($(HAVE_TCP_CONGESTION_OPS_TSO_SEGS),Y)
 	ccflags-y += -DHAVE_TCP_CONGESTION_OPS_TSO_SEGS
+endif
+
+# build BBRv3 with Google BBR Linux 6.13.7.
+ifeq ($(HAVE_TCP_DCTCP),Y)
+	obj-m += tcp_bbrv3.o
+	# for tcp_dctcp.h.
+	CFLAGS_tcp_bbrv3.o += -I$(KDIR)/net/ipv4/
+
+	obj-m += tcp_leo_bbrv3.o
+	CFLAGS_tcp_leo_bbrv3.o += -I$(KDIR)/net/ipv4/
 endif
