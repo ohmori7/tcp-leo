@@ -303,7 +303,7 @@ __bpf_kfunc static u32 bbrv1_min_tso_segs(struct sock *sk)
 	return READ_ONCE(sk->sk_pacing_rate) < (bbr_min_tso_rate >> 3) ? 1 : 2;
 }
 
-#ifdef NEW_CC
+#ifdef HAVE_TCP_CONGESTION_OPS_TSO_SEGS
 __bpf_kfunc static u32 bbrv1_tso_segs(struct sock *sk, unsigned int mss_now)
 {
 	u32 min_tso, tso_segs;
@@ -312,7 +312,7 @@ __bpf_kfunc static u32 bbrv1_tso_segs(struct sock *sk, unsigned int mss_now)
 	tso_segs = tcp_tso_autosize(sk, mss_now, min_tso);
 	return min_t(u32, tso_segs, sk->sk_gso_max_segs);
 }
-#endif /* NEW_CC */
+#endif /* HAVE_TCP_CONGESTION_OPS_TSO_SEGS */
 
 static u32 bbr_tso_segs_goal(struct sock *sk)
 {
@@ -1168,11 +1168,11 @@ static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 	.undo_cwnd	= bbrv1_undo_cwnd,
 	.cwnd_event	= bbrv1_cwnd_event,
 	.ssthresh	= bbrv1_ssthresh,
-#ifdef NEW_CC
+#ifdef HAVE_TCP_CONGESTION_OPS_TSO_SEGS
 	.tso_segs	= bbrv1_tso_segs,
-#else /* NEW_CC */
+#else /* HAVE_TCP_CONGESTION_OPS_TSO_SEGS */
 	.min_tso_segs	= bbrv1_min_tso_segs,
-#endif /* ! NEW_CC */
+#endif /* ! HAVE_TCP_CONGESTION_OPS_TSO_SEGS */
 	.get_info	= bbr_get_info,
 	.set_state	= bbrv1_set_state,
 };
@@ -1186,9 +1186,9 @@ BTF_ID_FLAGS(func, bbrv1_sndbuf_expand)
 BTF_ID_FLAGS(func, bbrv1_undo_cwnd)
 BTF_ID_FLAGS(func, bbrv1_cwnd_event)
 BTF_ID_FLAGS(func, bbrv1_ssthresh)
-#ifdef NEW_CC
+#ifdef HAVE_TCP_CONGESTION_OPS_TSO_SEGS
 BTF_ID_FLAGS(func, bbrv1_tso_segs)
-#endif /* NEW_CC */
+#endif /* HAVE_TCP_CONGESTION_OPS_TSO_SEGS */
 BTF_ID_FLAGS(func, bbrv1_min_tso_segs)
 BTF_ID_FLAGS(func, bbrv1_set_state)
 #endif
