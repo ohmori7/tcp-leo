@@ -5,19 +5,15 @@ PWD=	$(shell pwd)
 NEW_CC := $(shell							\
 	$(MAKE) -C $(DIR) M=$(PWD)/conftest/tcp_congestion_ops_cong_control modules >/dev/null 2>&1 &&	\
 	echo Y || echo N)
-# hrtimer_setup() replaces hrtimer_init() since Linux 7.0.
 HAVE_HRTIMER_SETUP := $(shell						\
 	$(MAKE) -C $(DIR) M=$(PWD)/conftest/hrtimer modules >/dev/null 2>&1 &&	\
 	echo Y || echo N)
-# sk->tcp_retransmit_timer was introduced since Linux 7.0.
 HAVE_SK_TCP_RETRANSMIT_TIMER := $(shell					\
 	$(MAKE) -C $(DIR) M=$(PWD)/conftest/sk_tcp_retransmit_timer modules >/dev/null 2>&1 && \
 	echo Y || echo N)
-# tcp_congestion_ops.tso_segs was introduced only in Google BBR code.
 HAVE_TCP_CONGESTION_OPS_TSO_SEGS := $(shell				\
 	$(MAKE) -C $(DIR) M=$(PWD)/conftest/tcp_congestion_ops_tso_segs modules >/dev/null 2>&1 && \
 	echo Y || echo N)
-# DCTCP is currently available with Google BBR code.
 HAVE_TCP_DCTCP := $(shell						\
 	$(MAKE) -C $(DIR) KDIR=$(DIR) M=$(PWD)/conftest/tcp_dctcp modules >/dev/null 2>&1 && \
 	echo Y || echo N)

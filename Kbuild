@@ -21,17 +21,24 @@ ccflags-y += -Werror
 ifeq ($(NEW_CC),Y)
 	ccflags-y += -DNEW_CC
 endif
+
+# hrtimer_setup() replaces hrtimer_init() since Linux 7.0.
 ifeq ($(HAVE_HRTIMER_SETUP),Y)
 	ccflags-y += -DHAVE_HRTIMER_SETUP
 endif
+
+# sk->tcp_retransmit_timer was introduced since Linux 7.0.
 ifeq ($(HAVE_SK_TCP_RETRANSMIT_TIMER),Y)
 	ccflags-y += -DHAVE_SK_TCP_RETRANSMIT_TIMER
 endif
+
+# tcp_congestion_ops.tso_segs was introduced only in Google BBR code.
 ifeq ($(HAVE_TCP_CONGESTION_OPS_TSO_SEGS),Y)
 	ccflags-y += -DHAVE_TCP_CONGESTION_OPS_TSO_SEGS
 endif
 
 # build BBRv3 with Google BBR Linux 6.13.7.
+# DCTCP is currently available with Google BBR code.
 ifeq ($(HAVE_TCP_DCTCP),Y)
 	obj-m += tcp_bbrv3.o
 	# for tcp_dctcp.h.
