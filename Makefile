@@ -3,7 +3,7 @@ DIR=	/lib/modules/$(shell uname -r)/build
 PWD=	$(shell pwd)
 #
 NEW_CC := $(shell							\
-	$(MAKE) -C $(DIR) M=$(PWD)/conftest modules >/dev/null 2>&1 &&	\
+	$(MAKE) -C $(DIR) M=$(PWD)/conftest/tcp_congestion_ops_cong_control modules >/dev/null 2>&1 &&	\
 	echo Y || echo N)
 # hrtimer_setup() replaces hrtimer_init() since Linux 7.0.
 HAVE_HRTIMER_SETUP := $(shell						\
