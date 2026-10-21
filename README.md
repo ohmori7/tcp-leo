@@ -1,7 +1,7 @@
 # TCP LEO for starlink
 
 ## TCP LEO
-TCP LEO is TCP congestion control tailored for Low Earth Orbit (LEO) satellite network, in which periodic handover or network reconfiguration occurs.
+TCP LEO is a sender side TCP congestion control tailored for Low Earth Orbit (LEO) satellite network, in which periodic handover or network reconfiguration occurs.
 
 ## How to use
 - install developer tools.
@@ -53,6 +53,7 @@ You can change paramters of the timing and duration to stop transmissions in ms.
 ## Debug
 
 ```
+% sudo sh -c 'echo Y > /sys/module/tcp_leo/parameters/leo_debug'
 % sudo sh -c 'echo "file ${SRCDIR}/tcp_leo.c:1234 +p" > /sys/kernel/debug/dynamic_debug/control'
 ```
 
