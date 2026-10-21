@@ -229,9 +229,14 @@ static void
 leo_time_init(void)
 {
 
+#ifdef HAVE_HRTIMER_SETUP
+	hrtimer_setup(&leo_jiffies_sync_timer, leo_jiffies_sync,
+	    CLOCK_REALTIME, HRTIMER_MODE_REL_PINNED_SOFT);
+#else /* HAVE_HRTIMER_SETUP */
 	hrtimer_init(&leo_jiffies_sync_timer, CLOCK_REALTIME,
 	    HRTIMER_MODE_REL_PINNED_SOFT);
 	leo_jiffies_sync_timer.function = leo_jiffies_sync;
+#endif /* ! HAVE_HRTIMER_SETUP */
 	leo_jiffies_sync(&leo_jiffies_sync_timer);
 }
 
@@ -298,7 +303,6 @@ leo_suspend_transmission(struct leo *leo)
 {
 	struct sock *sk = leo->sock;
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct inet_connection_sock *icsk = inet_csk(sk);
 
 	leo->last_snd_cwnd = tcp_snd_cwnd(tp);
 
@@ -311,8 +315,16 @@ leo_suspend_transmission(struct leo *leo)
 
 	/* extend retransmission and other timeouts. */
 	/* XXX: consider timer granularity for more accuracy. */
-	if (icsk->icsk_timeout != 0)
-		icsk->icsk_timeout += msecs_to_jiffies(leo_handover_duration(sk));
+#ifdef HAVE_SK_TCP_RETRANSMIT_TIMER
+	if (timer_pending(&sk->tcp_retransmit_timer)) {
+		timer_t timeout = tcp_timeout_expires(sk);
+		timeout += msecs_to_jiffies(leo_handover_duration(sk));
+		sk_reset_timer(sk, &sk->tcp_retransmit_timer, timeout);
+	}
+#else /* HAVE_SK_TCP_RETRANSMIT_TIMER */ /* before Linux 7.0 */
+	if (inet_csk(sk)->icsk_timeout != 0)
+		inet_csk(sk)->icsk_timeout += msecs_to_jiffies(leo_handover_duration(sk));
+#endif /* ! HAVE_SK_TCP_RETRANSMIT_TIMER */
 }
 
 __bpf_kfunc static void
@@ -607,9 +619,14 @@ leo_init(struct sock *sk)
 	leo->last_snd_cwnd = 0;
 
 #ifdef TCP_LEO_HRTIMER
+#ifdef HAVE_HRTIMER_SETUP
+	hrtimer_setup(&leo->handover_timer, leo_handover_timeout,
+	    CLOCK_REALTIME, HRTIMER_MODE_REL_PINNED_SOFT);
+#else /* HAVE_HRTIMER_SETUP */
 	hrtimer_init(&leo->handover_timer, CLOCK_REALTIME,
 	    HRTIMER_MODE_REL_PINNED_SOFT);
 	leo->handover_timer.function = leo_handover_timeout;
+#endif /* ! HAVE_HRTIMER_SETUP */
 #else /* TCP_LEO_HRTIMER */
 	timer_setup(&leo->handover_timer, leo_handover_timeout, 0);
 #endif /* TCP_LEO_HRTIMER */

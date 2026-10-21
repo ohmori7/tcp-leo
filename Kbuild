@@ -28,3 +28,9 @@ ifeq ($(NEW_CC),Y)
 	obj-m += tcp_leo_bbrv3.o
 	CFLAGS_tcp_leo_bbrv3.o += -I$(KDIR)/net/ipv4/
 endif
+ifeq ($(HAVE_HRTIMER_SETUP),Y)
+	ccflags-y += -DHAVE_HRTIMER_SETUP
+endif
+ifeq ($(HAVE_SK_TCP_RETRANSMIT_TIMER),Y)
+	ccflags-y += -DHAVE_SK_TCP_RETRANSMIT_TIMER
+endif
