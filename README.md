@@ -64,6 +64,7 @@ TCP LEO patch to a kernel, tcp_leo_kernel.patch, should be applied.
 Currently, below Linux kernel sources can be patched.
 
 - Ubuntu 24.04.5 LTS (GA) (kernel 6.8.0)
+- Ubuntu 26.04.1 LTS (GA) kernel 7.0.0)
 - Google BBR kernel (kernel 6.13.7-bbr)
 
 For BBRv3 kernel, a kernel can be built by:
