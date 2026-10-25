@@ -7,7 +7,7 @@ CFLAGS_tcp_leo_bbrv1.o := -DTCP_LEO_BBR
 #
 obj-m += tcp_bbrv1.o
 #
-obj-m += tcp_sat_pipe_bbrv1.o
+obj-m += tcp_sat_pipe.o
 #
 obj-m += tcp_illinois.o
 #
