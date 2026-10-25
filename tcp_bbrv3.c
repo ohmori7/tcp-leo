@@ -69,6 +69,12 @@
 #include <trace/events/tcp.h>
 #include "tcp_dctcp.h"
 
+#ifdef TCP_LEO_BBR
+#include "tcp_leo.h"
+#else /* TCP_LEO_BBR */
+#include "compat.h"
+#endif /* ! TCP_LEO_BBR */
+
 #define BBR_VERSION		3
 
 #define bbr_param(sk,name)	(bbr_ ## name)
@@ -120,7 +126,11 @@ struct bbr {
 		idle_restart:1,	     /* restarting after idle? */
 		probe_rtt_round_done:1,  /* a BBR_PROBE_RTT round at 4 pkts? */
 		init_cwnd:7,         /* initial cwnd */
+#ifdef TCP_LEO_BBR
+		leo_index:10;
+#else /* TCP_LEO_BBR */
 		unused_1:10;
+#endif /* ! TCP_LEO_BBR */
 	u32	pacing_gain:10,	/* current gain for setting pacing rate */
 		cwnd_gain:10,	/* current gain for setting cwnd */
 		full_bw_reached:1,   /* reached full bw in Startup? */
@@ -2043,6 +2053,11 @@ __bpf_kfunc static void bbr_main(struct sock *sk, u32 ack, int flag,
 	u32 bw, round_delivered;
 	int ce_ratio = -1;
 
+#ifdef TCP_LEO_BBR
+	if (leo_handover_check_by_index(sk, bbr->leo_index))
+		return;
+#endif /* TCP_LEO_BBR */
+
 	round_delivered = bbr_update_round_start(sk, rs, &ctx);
 	if (bbr->round_start) {
 		bbr->rounds_since_probe =
@@ -2155,7 +2170,21 @@ __bpf_kfunc static void bbr_init(struct sock *sk)
 
 	if (bbr_can_use_ecn(sk))
 		tp->ecn_flags |= TCP_ECN_ECT_PERMANENT;
+
+#ifdef TCP_LEO_BBR
+	bbr->leo_index = leo_index_get(leo_init(sk));
+#endif /* TCP_LEO_BBR */
 }
+
+#ifdef TCP_LEO_BBR
+static void leo_bbrv3_release(struct sock *sk)
+{
+	struct bbr *bbr = inet_csk_ca(sk);
+
+	leo_finish_by_index(sk, bbr->leo_index);
+	bbr->leo_index = LEO_INDEX_NONE;
+}
+#endif /* TCP_LEO_BBR */
 
 /* BBR marks the current round trip as a loss round. */
 static void bbr_note_loss(struct sock *sk)
@@ -2342,9 +2371,12 @@ __bpf_kfunc static void bbr_set_state(struct sock *sk, u8 new_state)
 
 static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 	.flags		= TCP_CONG_NON_RESTRICTED | TCP_CONG_WANTS_CE_EVENTS,
-	.name		= "bbrv3",
+	.name		= "leo-bbrv3",
 	.owner		= THIS_MODULE,
 	.init		= bbr_init,
+#ifdef TCP_LEO_BBR
+	.release	= leo_bbrv3_release,
+#endif /* TCP_LEO_BBR */
 	.cong_control	= bbr_main,
 	.sndbuf_expand	= bbr_sndbuf_expand,
 	.skb_marked_lost = bbr_skb_marked_lost,
@@ -2404,5 +2436,10 @@ MODULE_AUTHOR("Arjun Roy <arjunroy@google.com>");
 MODULE_AUTHOR("David Morley <morleyd@google.com>");
 
 MODULE_LICENSE("Dual BSD/GPL");
+#ifdef TCP_LEO_BBR
+MODULE_AUTHOR("Motoyuki OHMORI <ohmori@tottori-u.ac.jp>");
+MODULE_DESCRIPTION("TCP LEO BBRv3 (Bottleneck Bandwidth and RTT version 3) for Starlink");
+#else /* TCP_LEO_BBR */
 MODULE_DESCRIPTION("TCP BBR (Bottleneck Bandwidth and RTT)");
+#endif /* ! TCP_LEO_BBR */
 MODULE_VERSION(__stringify(BBR_VERSION));
