@@ -101,10 +101,8 @@ leo_index_next(void)
 {
 	u32 i;
 
-	WARN_ON(leo_index == LEO_INDEX_NONE);
-	WARN_ON(leo_index > leo_size);
-	if (leo_index == LEO_INDEX_NONE ||
-	    leo_index > leo_size)
+	if (WARN_ON_ONCE(leo_index == LEO_INDEX_NONE) ||
+	    WARN_ON_ONCE(leo_index > leo_size))
 		return LEO_INDEX_NONE;
 	for (i = leo_index; i <= leo_size; i++)
 		if (leos[i - 1] == NULL)
@@ -144,9 +142,9 @@ leo_index_free(struct leo *leo)
 {
 
 	mutex_lock(&leo_lock);
-	WARN_ON(leo->index == LEO_INDEX_NONE);
-	WARN_ON(leo->index > leo_size);
-	WARN_ON(leos[leo->index - 1] != leo);
+	WARN_ON_ONCE(leo->index == LEO_INDEX_NONE);
+	WARN_ON_ONCE(leo->index > leo_size);
+	WARN_ON_ONCE(leos[leo->index - 1] != leo);
 	if (leo->index != LEO_INDEX_NONE &&
 	    leo->index <= leo_size &&
 	    leos[leo->index - 1] == leo)
@@ -162,13 +160,11 @@ leo_lookup(struct sock *sk, u32 idx)
 
 	if (idx == LEO_INDEX_NONE)
 		return NULL;
-	WARN_ON(idx > leo_size);
-	if (idx > leo_size)
+	if (WARN_ON_ONCE(idx > leo_size))
 		return NULL;
 	leo = leos[idx - 1];
-	WARN_ON(leo == NULL);
-	WARN_ON(leo->sock != sk);
-	if (leo == NULL || leo->sock != sk)
+	if (WARN_ON_ONCE(leo == NULL) ||
+	    WARN_ON_ONCE(leo->sock != sk))
 		return NULL;
 	return leo;
 }
@@ -333,7 +329,7 @@ leo_resume_transmission(struct leo *leo)
 	struct sock *sk = leo->sock;
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	WARN_ON(leo->last_snd_cwnd == 0);
+	WARN_ON_ONCE(leo->last_snd_cwnd == 0);
 	tcp_snd_cwnd_set(tp, max(1, leo->last_snd_cwnd));
 
 	/* wake up the socket if necessary. */
@@ -455,8 +451,7 @@ leo_handover_check(struct leo *leo)
 	struct sock *sk;
 	struct tcp_sock *tp;
 
-	WARN_ON(leo == NULL);
-	if (leo == NULL) /* just in case. */
+	if (WARN_ON_ONCE(leo == NULL)) /* just in case. */
 		return false;
 	sk = leo->sock;
 	tp = tcp_sk(sk);
@@ -487,8 +482,7 @@ leo_handover_check_by_index(struct sock *sk, u32 idx)
 {
 	struct leo *leo;
 
-	WARN_ON(idx > leo_size);
-	if (idx > leo_size)
+	if (WARN_ON_ONCE(idx > leo_size))
 		return false;
 	leo = leos[idx - 1];
 	if (leo == NULL || leo->sock != sk)
@@ -639,12 +633,9 @@ __bpf_kfunc void
 leo_finish(struct leo *leo)
 {
 
-	WARN_ON(leo == NULL);
-	WARN_ON(leo->index == LEO_INDEX_NONE);
-	WARN_ON(leo->index > leo_size);
-	if (leo == NULL ||
-	    leo->index == LEO_INDEX_NONE ||
-	    leo->index > leo_size)
+	if (WARN_ON_ONCE(leo == NULL) ||
+	    WARN_ON_ONCE(leo->index == LEO_INDEX_NONE) ||
+	    WARN_ON_ONCE(leo->index > leo_size))
 		return;
 
 	DP("LEO[%u:%p]: free: %p", leo->index, LEO_SOCKET(leo), leo);
