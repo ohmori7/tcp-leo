@@ -31,6 +31,10 @@
 #include <linux/math64.h>
 #include <net/tcp.h>
 
+#ifdef TCP_LEO_CUBIC
+#include "tcp_leo.h"
+#endif /* TCP_LEO_CUBIC */
+
 #define BICTCP_BETA_SCALE    1024	/* Scale factor beta calculation
 					 * max_cwnd = snd_cwnd * beta
 					 */
@@ -102,6 +106,9 @@ struct bictcp {
 	u32	end_seq;	/* end_seq of the round */
 	u32	last_ack;	/* last time when the ACK spacing is close */
 	u32	curr_rtt;	/* the minimum rtt of current round */
+#ifdef TCP_LEO_CUBIC
+	struct leo *leo;
+#endif /* TCP_LEO_CUBIC */
 };
 
 static inline void bictcp_reset(struct bictcp *ca)
@@ -137,12 +144,37 @@ __bpf_kfunc static void cubictcp_init(struct sock *sk)
 
 	if (!hystart && initial_ssthresh)
 		tcp_sk(sk)->snd_ssthresh = initial_ssthresh;
+
+#ifdef TCP_LEO_CUBIC
+	ca->leo = leo_init(sk);
+#endif /* TCP_LEO_CUBIC */
 }
+
+#ifdef TCP_LEO_CUBIC
+__bpf_kfunc static void cubictcp_release(struct sock *sk)
+{
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	if (ca->leo != NULL)
+		leo_finish(ca->leo);
+	ca->leo = NULL;
+}
+#endif /* TCP_LEO_CUBIC */
 
 __bpf_kfunc static void cubictcp_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
+	struct bictcp *ca = inet_csk_ca(sk);
+
+	if (event == CA_EVENT_LOSS) {
+		struct tcp_sock *tp = tcp_sk(sk);
+
+		if (tp->prior_cwnd == 0) {
+			tp->prior_cwnd = ca->last_cwnd;
+			DP("LEO[%p] recover zero prior cwnd: %u", sk, ca->last_cwnd);
+		}
+		return;
+	}
 	if (event == CA_EVENT_TX_START) {
-		struct bictcp *ca = inet_csk_ca(sk);
 		u32 now = tcp_jiffies32;
 		s32 delta;
 
@@ -329,6 +361,11 @@ __bpf_kfunc static void cubictcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 	if (!tcp_is_cwnd_limited(sk))
 		return;
 
+#ifdef TCP_LEO_CUBIC
+	if (leo_handover_check(ca->leo))
+		return;
+#endif /* TCP_LEO_CUBIC */
+
 	if (tcp_in_slow_start(tp)) {
 		acked = tcp_slow_start(tp, acked);
 		if (!acked)
@@ -391,10 +428,6 @@ static void hystart_update(struct sock *sk, u32 delay)
 
 	if (after(tp->snd_una, ca->end_seq))
 		bictcp_hystart_reset(sk);
-
-	/* hystart triggers when cwnd is larger than some threshold */
-	if (tcp_snd_cwnd(tp) < hystart_low_window)
-		return;
 
 	if (hystart_detect & HYSTART_ACK_TRAIN) {
 		u32 now = bictcp_clock_us(sk);
@@ -471,12 +504,18 @@ __bpf_kfunc static void cubictcp_acked(struct sock *sk, const struct ack_sample 
 	if (ca->delay_min == 0 || ca->delay_min > delay)
 		ca->delay_min = delay;
 
-	if (!ca->found && tcp_in_slow_start(tp) && hystart)
+	/* hystart triggers when cwnd is larger than some threshold */
+	if (!ca->found && tcp_in_slow_start(tp) && hystart &&
+	    tcp_snd_cwnd(tp) >= hystart_low_window)
 		hystart_update(sk, delay);
 }
 
 static struct tcp_congestion_ops cubictcp __read_mostly = {
+	.flags		= TCP_CONG_NON_RESTRICTED,
 	.init		= cubictcp_init,
+#ifdef TCP_LEO_CUBIC
+	.release	= cubictcp_release,
+#endif /* TCP_LEO_CUBIC */
 	.ssthresh	= cubictcp_recalc_ssthresh,
 	.cong_avoid	= cubictcp_cong_avoid,
 	.set_state	= cubictcp_state,
@@ -484,13 +523,16 @@ static struct tcp_congestion_ops cubictcp __read_mostly = {
 	.cwnd_event	= cubictcp_cwnd_event,
 	.pkts_acked     = cubictcp_acked,
 	.owner		= THIS_MODULE,
-	.name		= "cubic",
+	.name		= "leo-cubic",
 };
 
-BTF_SET8_START(tcp_cubic_check_kfunc_ids)
+BTF_KFUNCS_START(tcp_cubic_check_kfunc_ids)
 #ifdef CONFIG_X86
 #ifdef CONFIG_DYNAMIC_FTRACE
 BTF_ID_FLAGS(func, cubictcp_init)
+#ifdef TCP_LEO_CUBIC
+BTF_ID_FLAGS(func, cubictcp_release)
+#endif /* TCP_LEO_CUBIC */
 BTF_ID_FLAGS(func, cubictcp_recalc_ssthresh)
 BTF_ID_FLAGS(func, cubictcp_cong_avoid)
 BTF_ID_FLAGS(func, cubictcp_state)
@@ -498,7 +540,7 @@ BTF_ID_FLAGS(func, cubictcp_cwnd_event)
 BTF_ID_FLAGS(func, cubictcp_acked)
 #endif
 #endif
-BTF_SET8_END(tcp_cubic_check_kfunc_ids)
+BTF_KFUNCS_END(tcp_cubic_check_kfunc_ids)
 
 static const struct btf_kfunc_id_set tcp_cubic_kfunc_set = {
 	.owner = THIS_MODULE,
@@ -555,5 +597,11 @@ module_exit(cubictcp_unregister);
 
 MODULE_AUTHOR("Sangtae Ha, Stephen Hemminger");
 MODULE_LICENSE("GPL");
+#ifdef TCP_LEO_CUBIC
+MODULE_AUTHOR("Motoyuki OHMORI");
+MODULE_DESCRIPTION("TCP LEO CUBIC for Starlink");
+MODULE_VERSION("0.1");
+#else /* TCP_LEO_CUBIC */
 MODULE_DESCRIPTION("CUBIC TCP");
 MODULE_VERSION("2.3");
+#endif /* ! TCP_LEO_CUBIC */
