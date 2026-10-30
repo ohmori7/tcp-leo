@@ -75,6 +75,8 @@ For BBRv3 kernel, a kernel can be built by:
 % git checkout -b v3_tcp_leo origin/v3_tcp_leo
 % cd tcp-leo-bbr
 % cp /boot/config-$(uname -r) .config
+% scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
+% scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
 % make olddefconfig
 % echo CONFIG_TCP_CONG_BBR1=m >> .config
 % make -j$(nproc) LOCALVERSION=-tcp-leo-bbr3 2>&1 | tee ~/bbr3-build.log
