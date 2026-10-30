@@ -1,5 +1,6 @@
 #
 DIR=	/lib/modules/$(shell uname -r)/build
+KDIR?=	$(DIR)
 PWD=	$(shell pwd)
 #
 NEW_CC := $(shell							\
@@ -15,10 +16,10 @@ HAVE_TCP_CONGESTION_OPS_TSO_SEGS := $(shell				\
 	$(MAKE) -C $(DIR) M=$(PWD)/conftest/tcp_congestion_ops_tso_segs modules >/dev/null 2>&1 && \
 	echo Y || echo N)
 HAVE_TCP_DCTCP := $(shell						\
-	$(MAKE) -C $(DIR) KDIR=$(DIR) M=$(PWD)/conftest/tcp_dctcp modules >/dev/null 2>&1 && \
+	$(MAKE) -C $(DIR) KDIR=$(KDIR) M=$(PWD)/conftest/tcp_dctcp modules >/dev/null 2>&1 && \
 	echo Y || echo N)
 # out-of-tree rules.
 all:
-	make -C $(DIR) M=$(PWD) KDIR=$(DIR) NEW_CC=$(NEW_CC) HAVE_HRTIMER_SETUP=$(HAVE_HRTIMER_SETUP) HAVE_SK_TCP_RETRANSMIT_TIMER=$(HAVE_SK_TCP_RETRANSMIT_TIMER) HAVE_TCP_CONGESTION_OPS_TSO_SEGS=$(HAVE_TCP_CONGESTION_OPS_TSO_SEGS) HAVE_TCP_DCTCP=$(HAVE_TCP_DCTCP) modules
+	make -C $(DIR) M=$(PWD) KDIR=$(KDIR) NEW_CC=$(NEW_CC) HAVE_HRTIMER_SETUP=$(HAVE_HRTIMER_SETUP) HAVE_SK_TCP_RETRANSMIT_TIMER=$(HAVE_SK_TCP_RETRANSMIT_TIMER) HAVE_TCP_CONGESTION_OPS_TSO_SEGS=$(HAVE_TCP_CONGESTION_OPS_TSO_SEGS) HAVE_TCP_DCTCP=$(HAVE_TCP_DCTCP) modules
 clean:
 	make -C $(DIR) M=$(PWD) clean
