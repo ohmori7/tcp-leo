@@ -94,6 +94,12 @@ You can then install:
 sudo dpkg -i ../*.deb
 ```
 
+You may specify kernel source directory when compiling TCP LEO:
+
+```
+KDIR=~/linux-source make
+```
+
 ## TODO
 - secure boot support (currently, no digital signature)
 
