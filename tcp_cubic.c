@@ -523,7 +523,11 @@ static struct tcp_congestion_ops cubictcp __read_mostly = {
 	.cwnd_event	= cubictcp_cwnd_event,
 	.pkts_acked     = cubictcp_acked,
 	.owner		= THIS_MODULE,
+#ifdef TCP_LEO_CUBIC
 	.name		= "leo-cubic",
+#else /* TCP_LEO_CUBIC */
+	.name		= "cubic",
+#endif /* ! TCP_LEO_CUBIC */
 };
 
 BTF_KFUNCS_START(tcp_cubic_check_kfunc_ids)
